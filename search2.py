@@ -11,7 +11,6 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 from requests.auth import HTTPBasicAuth
-from firecrawl import FirecrawlApp
 import markdown
 import tenacity
 from datetime import datetime, timezone
@@ -581,6 +580,7 @@ def generate_article(client, transcripts, keywords=None, news_angle=None, sectio
     try:
         if not transcripts:
             return None
+        promotional_text = ""
         keyword_list = keywords if keywords else []
         primary_keyword = keyword_list[0] if keyword_list else ""
         secondary_keywords = ", ".join(keyword_list[1:]) if len(keyword_list) > 1 else ""
