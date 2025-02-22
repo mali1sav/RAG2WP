@@ -26,7 +26,8 @@ load_dotenv()
 SITE_EDIT_URLS = {
     "BITCOINIST": "https://bitcoinist.com/wp-admin/post.php?post={post_id}&action=edit&classic-editor",
     "NEWSBTC": "https://www.newsbtc.com/wp-admin/post.php?post={post_id}&action=edit&classic-editor",
-    "ICOBENCH": "https://icobench.com/th/wp-admin/post.php?post={post_id}&action=edit&classic-editor"
+    "ICOBENCH": "https://icobench.com/th/wp-admin/post.php?post={post_id}&action=edit&classic-editor",
+    "CRYPTONWS": "https://cryptonews.com/th/wp-admin/post.php?post={post_id}&action=edit&classic-editor"
 }
 
 # ------------------------------
@@ -43,11 +44,8 @@ def escape_special_chars(text):
 
 def generate_slug_custom(text):
     """Generate a sanitized slug using python-slugify."""
-    # Convert to lowercase first
     text = text.lower()
-    # Use basic slugify without extra parameters
     slug = slugify(text)
-    # Trim to max length if needed
     return slug[:200] if len(slug) > 200 else slug
 
 def construct_endpoint(wp_url, endpoint_path):
@@ -154,33 +152,25 @@ def parse_article(article_json):
             format_type = section.get('format', 'paragraph')
             
             if format_type == 'list':
-                # Format list items with bullets
                 content_parts.extend([f"* {item}" for item in section['paragraphs']])
             elif format_type == 'table':
-                # Format table data
                 if section['paragraphs']:
-                    # Handle if the data is already in markdown table format
                     if isinstance(section['paragraphs'][0], str) and section['paragraphs'][0].startswith('|'):
                         content_parts.extend(section['paragraphs'])
-                    # Handle if the data is in array format
                     elif isinstance(section['paragraphs'][0], (list, tuple)):
                         headers = section['paragraphs'][0]
                         rows = section['paragraphs'][1:]
-                        # Create markdown table
                         content_parts.append('| ' + ' | '.join(str(h) for h in headers) + ' |')
                         content_parts.append('| ' + ' | '.join(['---'] * len(headers)) + ' |')
                         for row in rows:
                             content_parts.append('| ' + ' | '.join(str(cell) for cell in row) + ' |')
-                    # Handle if each row is a dict
                     elif isinstance(section['paragraphs'][0], dict):
                         headers = section['paragraphs'][0].keys()
-                        # Create markdown table
                         content_parts.append('| ' + ' | '.join(str(h) for h in headers) + ' |')
                         content_parts.append('| ' + ' | '.join(['---'] * len(headers)) + ' |')
                         for row in section['paragraphs']:
                             content_parts.append('| ' + ' | '.join(str(row.get(h, '')) for h in headers) + ' |')
             else:
-                # Regular paragraphs
                 content_parts.extend(section['paragraphs'])
             content_parts.append("")
             
@@ -227,7 +217,7 @@ def upload_image_to_wordpress(b64_data, wp_url, username, wp_app_password, filen
             media_id = media_data.get('id')
             source_url = media_data.get('source_url', '')
             st.write(f"[Upload] Received Media ID: {media_id}")
-            # Update alt text via PATCH (or PUT)
+            # Update alt text via PATCH
             update_endpoint = f"{media_endpoint}/{media_id}"
             update_data = {'alt_text': alt_text, 'title': alt_text}
             update_response = requests.patch(update_endpoint, json=update_data, auth=HTTPBasicAuth(username, wp_app_password))
@@ -245,18 +235,24 @@ def upload_image_to_wordpress(b64_data, wp_url, username, wp_app_password, filen
         st.error(f"[Upload] Exception during image upload: {e}")
         return None
 
-def submit_article_to_wordpress(article, wp_url, username, wp_app_password, primary_keyword="", site_name=None):
+def submit_article_to_wordpress(article, wp_url, username, wp_app_password, primary_keyword="", site_name=None, content_type="post"):
     """
     Submits the article to WordPress using the WP REST API.
+    Choose between 'post' and 'page' via the content_type parameter.
     Sets Yoast SEO meta fields and auto-selects the featured image.
     """
     # Deep normalization for article data
     while isinstance(article, list) and len(article) > 0:
-        article = article[0]  # Unpack nested lists
+        article = article[0]
     if not isinstance(article, dict):
         article = {}
     
-    endpoint = construct_endpoint(wp_url, "/wp-json/wp/v2/posts")
+    # Determine endpoint based on content_type
+    if content_type.lower() == "page":
+        endpoint = construct_endpoint(wp_url, "/wp-json/wp/v2/pages")
+    else:
+        endpoint = construct_endpoint(wp_url, "/wp-json/wp/v2/posts")
+        
     st.write("Submitting article with Yoast SEO fields...")
     st.write("Yoast Title:", article.get("yoast_title"))
     st.write("Yoast Meta Description:", article.get("yoast_metadesc"))
@@ -274,15 +270,12 @@ def submit_article_to_wordpress(article, wp_url, username, wp_app_password, prim
     }
 
     if "image" in article:
-        # Normalize image data if it's a list
         image_data = article["image"]
         if isinstance(image_data, list) and len(image_data) > 0:
             image_data = image_data[0]
-        
         if isinstance(image_data, dict) and image_data.get("media_id"):
             data["featured_media"] = image_data["media_id"]
 
-    # Example category/tag logic:
     keyword_to_cat_tag = {"Dogecoin": 527, "Bitcoin": 7}
     if primary_keyword in keyword_to_cat_tag:
         cat_tag_id = keyword_to_cat_tag[primary_keyword]
@@ -294,13 +287,10 @@ def submit_article_to_wordpress(article, wp_url, username, wp_app_password, prim
         if response.status_code in (200, 201):
             post = response.json()
             post_id = post.get('id')
-            st.success(f"Article '{data['title']}' submitted successfully! Post ID: {post_id}")
-            
-            # If we have a site-specific edit URL, create a clickable link
+            st.success(f"Article '{data['title']}' submitted successfully! ID: {post_id}")
             if site_name in SITE_EDIT_URLS:
                 edit_url = SITE_EDIT_URLS[site_name].format(post_id=post_id)
-                st.markdown(f"📝 [Click here to edit your draft article]({edit_url})")
-                # Open the URL in a new browser tab
+                st.markdown(f"[Click here to edit your draft article]({edit_url})")
                 import webbrowser
                 webbrowser.open(edit_url)
             return post
@@ -319,7 +309,7 @@ def submit_article_to_wordpress(article, wp_url, username, wp_app_password, prim
 def jina_extract_via_r(url: str) -> dict:
     """
     Uses the Jina REST API endpoint (https://r.jina.ai/) to extract LLM-ready text.
-    This appends the URL to the Jina base URL and returns the extracted markdown content along with minimal SEO fields.
+    Returns the extracted markdown content with minimal SEO fields.
     """
     JINA_BASE_URL = "https://r.jina.ai/"
     full_url = JINA_BASE_URL + url
@@ -336,7 +326,6 @@ def jina_extract_via_r(url: str) -> dict:
         }
     if r.status_code == 200:
         text = r.text
-        # Assume the API returns LLM-ready text with a clear "Markdown Content:" section.
         md_index = text.find("Markdown Content:")
         md_content = text[md_index + len("Markdown Content:"):].strip() if md_index != -1 else text.strip()
         title_match = re.search(r"Title:\s*(.*)", text)
@@ -366,10 +355,9 @@ def jina_extract_via_r(url: str) -> dict:
 
 def extract_url_content(gemini_client, url, messages_placeholder):
     """
-    Extracts article content from a URL. Handles both YouTube URLs (using transcript)
-    and regular web pages (using Jina REST API).
+    Extracts article content from a URL.
+    Handles YouTube URLs (using transcript) and regular web pages (using Jina REST API).
     """
-    # Check if it's a YouTube URL
     fetcher = TranscriptFetcher()
     video_id = fetcher.get_video_id(url)
     
@@ -377,7 +365,6 @@ def extract_url_content(gemini_client, url, messages_placeholder):
         with messages_placeholder:
             st.info(f"Extracting YouTube transcript from {url}...")
         transcript_data = fetcher.get_transcript(url)
-        
         if transcript_data:
             with st.expander("Debug: YouTube Transcript", expanded=False):
                 st.write("Transcript data:", transcript_data)
@@ -390,9 +377,8 @@ def extract_url_content(gemini_client, url, messages_placeholder):
                 'author': None
             }
         else:
-            st.warning(f"Could not extract transcript from YouTube video. Falling back to Jina extraction...")
+            st.warning("Could not extract transcript from YouTube video. Falling back to Jina extraction...")
     
-    # Fallback to Jina for non-YouTube URLs or if transcript extraction fails
     with messages_placeholder:
         st.info(f"Extracting content from {url} using Jina REST API...")
     fallback_data = jina_extract_via_r(url)
@@ -436,47 +422,34 @@ def init_gemini_client():
 )
 def clean_gemini_response(text):
     """Clean Gemini response to extract valid JSON."""
-    # Extract JSON from code blocks if present
     json_match = re.search(r'```(?:json)?\s*({[\s\S]*?})\s*```', text)
     if json_match:
         return json_match.group(1).strip()
-    
-    # If no code blocks, try to find a JSON object
     json_match = re.search(r'({[\s\S]*?})', text)
     if json_match:
         return json_match.group(1).strip()
-    
-    # If no JSON object found, clean the text
     text = re.sub(r'```(?:json)?\s*|```', '', text)
     text = text.strip()
-    
-    # Ensure it's wrapped in curly braces
     if not text.startswith('{'):
         text = '{' + text
     if not text.endswith('}'):
         text = text + '}'
-    
     return text
 
 def validate_article_json(json_str):
     """Validate article JSON against schema and return cleaned data."""
     try:
-        # Parse JSON and ensure we have a dictionary
         data = json.loads(json_str)
         if isinstance(data, list):
             data = next((item for item in data if isinstance(item, dict)), {})
         elif not isinstance(data, dict):
             data = {}
-            
-        # Skip validation if we have an empty dictionary
         if not data:
             return {}
-            
         if not data.get('title'):
             raise ValueError("Missing required field: title")
         if not data.get('content'):
             raise ValueError("Missing required field: content")
-        # Handle case-insensitive 'seo' or 'SEO' field
         seo_field = next((k for k in data.keys() if k.lower() == 'seo'), None)
         if not seo_field:
             raise ValueError("Missing required field: seo")
@@ -561,13 +534,11 @@ def load_promotional_content():
 
 def clean_source_content(content):
     """Clean source content by handling special characters and escape sequences"""
-    # Replace problematic escape sequences
-    content = content.replace('!\[', '![')  # Fix image markdown escapes
-    content = content.replace('\\[', '[')   # Fix link markdown escapes
-    content = content.replace('\\]', ']')   # Fix link markdown escapes
-    content = content.replace('\\(', '(')   # Fix parentheses escapes
-    content = content.replace('\\)', ')')   # Fix parentheses escapes
-    # Handle other special characters if needed
+    content = content.replace('!\[', '![')
+    content = content.replace('\\[', '[')
+    content = content.replace('\\]', ']')
+    content = content.replace('\\(', '(')
+    content = content.replace('\\)', ')')
     return content
 
 def generate_article(client, transcripts, keywords=None, news_angle=None, section_count=3, promotional_text=None, selected_site=None):
@@ -575,19 +546,16 @@ def generate_article(client, transcripts, keywords=None, news_angle=None, sectio
     Generates a comprehensive news article in Thai using the Gemini API.
     Uses the extracted source content (via Jina) in the prompt.
     Returns a JSON-structured article following the Article schema.
-    Always returns a dictionary, even if input is a list.
     """
     try:
         if not transcripts:
             return None
-        # Set promotional text to empty string if none was selected
         if promotional_text is None:
             promotional_text = ""
         keyword_list = keywords if keywords else []
         primary_keyword = keyword_list[0] if keyword_list else ""
         secondary_keywords = ", ".join(keyword_list[1:]) if len(keyword_list) > 1 else ""
         
-        # Concatenate source content from transcripts with clear delimiters.
         source_texts = ""
         seen_sources = set()
         for t in transcripts:
@@ -631,54 +599,33 @@ Structure your output as valid JSON with the following keys:
    - sections: An array of exactly {section_count} objects, each with:
      - heading: H2 heading using power words (include {primary_keyword} and {secondary_keywords} where natural)
      - format: Choose the most appropriate format for this section:
-       - 'paragraph': For explanatory content (default). Each section MUST have 2-3 detailed paragraphs (at least 3-4 sentences each) with in-depth analysis, data points, examples, and thorough explanations. Don't just summarize - dive deep into each point with supporting evidence and context.
-       - 'list': For steps, features, or benefits. Each list item MUST be comprehensive with 2-3 sentences of explanation, not just a short phrase. Include relevant examples, data points, or use cases for each item.
-       - 'table': For comparisons or data. Each cell MUST contain detailed explanations (2-3 sentences) with context and examples, not just single words. Include at least 3 rows of comprehensive comparisons.
-     - paragraphs: Array of 2-4 elements based on the chosen format:
-       - For 'paragraph': Regular paragraphs
-       - For 'list': Bullet points or numbered items
-       - For 'table': Array of rows with headers
-       Include {primary_keyword} naturally where relevant.
+       - 'paragraph': For explanatory content (default). Each section MUST have 2-3 detailed paragraphs (at least 3-4 sentences each) with in-depth analysis, data points, examples, and thorough explanations.
+       - 'list': For steps, features, or benefits. Each list item MUST be comprehensive with 2-3 sentences of explanation.
+       - 'table': For comparisons or data. Each cell MUST contain detailed explanations (2-3 sentences) with context and examples.
+     - paragraphs: Array of 2-4 elements based on the chosen format.
          {f'One section MUST seamlessly integrate this promotional content while maintaining natural flow and mentioning the {primary_keyword}: {promotional_text}' if promotional_text else ''}
    - conclusion: A concluding paragraph summarizing the key points of the article while mentioning the {primary_keyword} naturally.
-- sources: An array of objects with keys "domain" and "url" for each source (each included only once).
+- sources: An array of objects with keys "domain" and "url" for each source.
 - seo: An object with keys:
-   - slug: English URL-friendly slug that MUST include {primary_keyword}{' and end with "-thailand"' if selected_site in ['BITCOINIST', 'NEWSBTC'] else ''}
+   - slug: English URL-friendly slug that MUST include {primary_keyword}{' and end with "-thailand"' if selected_site in ["BITCOINIST", "NEWSBTC"] else ''}
    - metaTitle: Thai title with {primary_keyword}
    - metaDescription: Use the same text as the Part 1 of the intro.
    - excerpt: One Thai sentence summary
-   - imagePrompt: The Image Prompt must be in English only. Create a photorealistic scene that fits the main news article, focusing on 1-2 main objects. Keep it simple and clear. Avoid charts, graphs, or technical diagrams as they don't work well with image generation.
+   - imagePrompt: The Image Prompt must be in English only. Create a photorealistic scene that fits the article, focusing on 1-2 main objects.
    - altText: Thai ALT text with {primary_keyword} while keeping technical terms and entities in English
    Ensure {primary_keyword} appears exactly once in title, metaTitle, and metaDescription.
 
 IMPORTANT NOTES:
 1. Content Balance Guidelines:
-   - Main Content (70%):
-     * Focus on news, analysis, and key information from source URLs
-     * Ensure comprehensive coverage of the main topic
-     * Maintain journalistic integrity and depth
-   - Promotional Content (30%):
-     * Select only the most relevant points from promotional text
-     * Limit to 2-3 paragraphs maximum
-     * Focus on points that naturally connect with the main topic
-
+   - Main Content (70%): Focus on news, analysis, and key information.
+   - Promotional Content (30%): Integrate promotional content naturally.
 2. Promotional Content Integration:
-   - Choose the most contextually relevant position (preferably middle or end of article)
-   - Create a dedicated section with a natural Thai heading that bridges the main topic and promotional content. You must create a sentence or two to transit seamlessly between them.
-   - Weave in {primary_keyword} naturally within this section
-   - Extract and use only key points that enhance the article's value
-   - Trim lengthy promotional content while preserving core message
-   - Ensure the promotional section reads like a natural part of the article's narrative
-
+   - Create a dedicated section for promotional content that transitions smoothly.
 3. General Guidelines:
-   - Maintain consistent tone and style throughout
-   - DO NOT modify or invent any factual details
-   - Preserve any image markdown exactly as provided
-   - Ensure promotional content supports rather than overshadows the main story
+   - Maintain consistent tone and style.
+   - Preserve any image markdown exactly as provided.
 
-IMPORTANT: DO NOT modify or invent any new factual details. Preserve any image markdown found within the analysis paragraphs exactly as provided.
-
-Below is the source content (in markdown) extracted from the articles:
+Below is the source content (in markdown):
 {source_texts}
 
 Return ONLY valid JSON, no additional commentary.
@@ -688,45 +635,28 @@ Return ONLY valid JSON, no additional commentary.
         response = make_gemini_request(client, prompt)
         if not response:
             return {}
-        
-        # If response is already a dict, convert it to JSON string first
         if isinstance(response, dict):
             response = json.dumps(response)
-        
         try:
-            # Try to parse the JSON response
             content = json.loads(response)
-            
-            # Force dict output format
             if isinstance(content, list):
                 content = content[0] if content else {}
-            
-            # Validate and ensure required fields exist
             if not isinstance(content, dict):
                 st.error("Response is not a valid dictionary")
                 return {}
-                
-            # Initialize required fields if missing
             if 'title' not in content:
                 content['title'] = f"Latest News about {primary_keyword}"
-                
             if 'content' not in content:
                 content['content'] = {}
-                
             if 'sections' not in content['content']:
                 content['content']['sections'] = []
-                
-            # Ensure each section has required fields
             for section in content['content'].get('sections', []):
                 if 'format' not in section:
                     section['format'] = 'paragraph'
                 if 'paragraphs' not in section:
                     section['paragraphs'] = []
-                    
             if 'conclusion' not in content['content']:
                 content['content']['conclusion'] = 'บทความนี้นำเสนอข้อมูลเกี่ยวกับ ' + primary_keyword + ' ซึ่งเป็นประเด็นสำคัญในตลาดคริปโตที่ควรติดตาม'
-                
-            # Initialize SEO fields if missing
             seo_field = next((k for k in content.keys() if k.lower() == 'seo'), 'seo')
             if seo_field not in content:
                 content[seo_field] = {
@@ -737,9 +667,7 @@ Return ONLY valid JSON, no additional commentary.
                     'imagePrompt': f"A photorealistic scene showing {primary_keyword} in a professional setting",
                     'altText': f"{primary_keyword} latest updates and developments"
                 }
-            
             return content
-            
         except json.JSONDecodeError as e:
             st.error(f"JSON parsing error: {str(e)}")
             st.error("Raw response:")
@@ -756,7 +684,6 @@ Return ONLY valid JSON, no additional commentary.
 def main():
     st.set_page_config(page_title="Generate and Upload Article", layout="wide")
     
-    # Default values:
     default_url = ""
     default_keyword = "Bitcoin"
     default_news_angle = ""
@@ -766,20 +693,17 @@ def main():
         st.error("Failed to initialize Gemini client")
         return
     
-    st.sidebar.header("Article Generation")
-    urls_input = st.sidebar.text_area("Enter URLs (one per line) to extract content from:", value=default_url)
+    urls_input = st.sidebar.text_area("Enter URLs (one per line) to extract from:", value=default_url)
     keywords_input = st.sidebar.text_area("Keywords (one per line):", value=default_keyword, height=100)
     news_angle = st.sidebar.text_input("News Angle:", value=default_news_angle)
     section_count = st.sidebar.slider("Number of sections:", 2, 8, 3)
     
-    # Additional content text area
     additional_content = st.sidebar.text_area(
         "Additional Content",
         placeholder="Paste any extra content here. It will be treated as an additional source.",
         height=150
     )
     
-    # Promotional content selection
     st.sidebar.header("Promotional Content")
     pr_folder = os.path.join(os.path.dirname(__file__), "pr")
     if os.path.isdir(pr_folder):
@@ -800,9 +724,6 @@ def main():
         st.sidebar.warning("'pr' folder not found")
         promotional_text = None
     
-    # ----------------------------
-    # Replaced WordPress Credentials Section
-    # ----------------------------
     st.sidebar.header("Select WordPress Site to Upload")
     sites = {
         "ICOBENCH": {
@@ -832,41 +753,31 @@ def main():
     wp_url = sites[selected_site]["url"]
     wp_username = sites[selected_site]["username"]
     wp_app_password = sites[selected_site]["password"]
-    # ----------------------------
+    
+    # Radio button to choose between Post or Page
+    content_type_choice = st.sidebar.radio("Upload as:", ("Post", "Page"))
     
     messages_placeholder = st.empty()
     
     if st.sidebar.button("Generate Article"):
         transcripts = []
-        
-        # Process URLs if provided
         if urls_input.strip():
             urls = [line.strip() for line in urls_input.splitlines() if line.strip()]
             for url in urls:
                 extracted = extract_url_content(gemini_client, url, messages_placeholder)
                 if extracted:
                     transcripts.append(extracted)
-        
-        # Add additional content if provided
         if additional_content.strip():
             transcripts.append({
                 'content': additional_content.strip(),
                 'source': 'Additional Content',
                 'url': ''
             })
-        
-        # Check if we have any content to process
         if not transcripts:
             st.error("Please provide either URLs or Additional Content to generate an article")
             return
-            
-        # Process keywords
         keywords = [k.strip() for k in keywords_input.splitlines() if k.strip()]
-            
         if transcripts:
-            # Get selected site
-            selected_site = st.session_state.get('selected_site')
-            
             article_content = generate_article(
                 gemini_client,
                 transcripts,
@@ -891,27 +802,21 @@ def main():
             st.json(article_json)
             st.subheader("Article Content Preview")
             st.write(f"**{article_json['title']}**")
-            # Display intro parts
             if isinstance(article_json['content']['intro'], dict):
                 st.write(article_json['content']['intro'].get('Part 1', ''))
                 st.write(article_json['content']['intro'].get('Part 2', ''))
             else:
                 st.write(article_json['content']['intro'])
-            
-            # Display sections with different formats
             for section in article_json['content']['sections']:
                 st.write(f"### {section['heading']}")
                 format_type = section.get('format', 'paragraph')
-                
                 if format_type == 'list':
                     for item in section['paragraphs']:
                         st.write(f"* {item}")
                 elif format_type == 'table':
-                    # If the data is already in markdown table format
                     if isinstance(section['paragraphs'][0], str) and section['paragraphs'][0].startswith('|'):
                         for row in section['paragraphs']:
                             st.write(row)
-                    # If the data is in array or dict format
                     elif section['paragraphs']:
                         import pandas as pd
                         if isinstance(section['paragraphs'][0], (list, tuple)):
@@ -919,44 +824,36 @@ def main():
                         elif isinstance(section['paragraphs'][0], dict):
                             df = pd.DataFrame(section['paragraphs'])
                         st.table(df)
-                else:  # default paragraph format
+                else:
                     for para in section['paragraphs']:
                         st.write(para)
                 st.write("")
-            
             st.write("**บทสรุป:**")
             st.write(article_json['content']['conclusion'])
         except json.JSONDecodeError as e:
             st.error(f"Invalid JSON format: {str(e)}")
             st.text_area("Raw Content", value=st.session_state.article, height=300)
         
-        # Process images in the article content (if any markdown images exist)
         if "article_data" not in st.session_state:
             st.session_state.article_data = {}
         if "processed_article" not in st.session_state.article_data:
             parsed = parse_article(st.session_state.article)
             st.session_state.article_data["processed_article"] = parsed
         
-        # Supplementary image generation via Together AI
+        # Together AI Image Generation
         if "image" not in st.session_state.article_data:
             parsed_for_image = parse_article(st.session_state.article)
             image_prompt = parsed_for_image.get("image_prompt")
             alt_text = parsed_for_image.get("image_alt")
             if image_prompt:
-                # Show original prompt
                 st.info(f"Original image prompt: '{image_prompt}'")
-                
-                # Remove Thai characters to pass a simpler English prompt to the image generator
                 image_prompt_english = re.sub(r'[\u0E00-\u0E7F]+', '', image_prompt).strip()
                 if not image_prompt_english:
                     image_prompt_english = "A photo-realistic scene of cryptocurrencies floating in the air, depicting the Crypto news"
                     st.warning("Using fallback image prompt since no English text was found")
-                
-                # Show cleaned prompt
                 st.info(f"Cleaned English prompt for Together AI: '{image_prompt_english}'")
             else:
                 image_prompt_english = None
-            
             if image_prompt_english:
                 together_client = Together()
                 try:
@@ -1023,7 +920,8 @@ def main():
                         wp_username, 
                         wp_app_password, 
                         primary_keyword=primary_keyword_upload,
-                        site_name=st.session_state.get('selected_site')
+                        site_name=selected_site,
+                        content_type=content_type_choice  # Pass selected content type ("Post" or "Page")
                     )
                 except Exception as e:
                     st.error(f"Error during upload process: {str(e)}")
