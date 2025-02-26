@@ -129,10 +129,11 @@ class Article(BaseModel):
 # SEO Parsing Functions
 # ------------------------------
 
-def parse_article(article_json):
+def parse_article(article_json, add_affiliate_note=False):
     """
     Parses the generated article JSON into structured elements.
     Returns a dict with keys needed for WordPress upload.
+    If add_affiliate_note=True, append the affiliate disclosure shortcode after the conclusion.
     """
     try:
         article = json.loads(article_json) if isinstance(article_json, str) else article_json
@@ -175,6 +176,11 @@ def parse_article(article_json):
             content_parts.append("")
             
         content_parts.append(article['content']['conclusion'])
+
+        # If user included promotional content, add the affiliate disclosure note
+        if add_affiliate_note:
+            content_parts.append("[su_note note_color=\"#FAEFFF\"] เรามุ่งมั่นในการสร้างความโปร่งใสอย่างเต็มที่กับผู้อ่านของเรา บางเนื้อหาในเว็บไซต์อาจมีลิงก์พันธมิตร ซึ่งเราอาจได้รับค่าคอมมิชชั่นจากความร่วมมือเหล่านี้ [/su_note]")
+
         return {
             "main_title": article['title'],
             "main_content": "\n\n".join(content_parts),
@@ -746,6 +752,11 @@ def main():
             "username": os.getenv("NEWSBTC_WP_USERNAME"),
             "password": os.getenv("NEWSBTC_WP_APP_PASSWORD")
         },
+        "INSIDEBITCOINS": {
+            "url": os.getenv("INSIDEBITCOINS_WP_URL"),
+            "username": os.getenv("INSIDEBITCOINS_WP_USERNAME"),
+            "password": os.getenv("INSIDEBITCOINS_WP_APP_PASSWORD")
+        }
     }
     site_options = list(sites.keys())
     selected_site = st.sidebar.selectbox("Choose a site:", site_options)
@@ -837,7 +848,9 @@ def main():
         if "article_data" not in st.session_state:
             st.session_state.article_data = {}
         if "processed_article" not in st.session_state.article_data:
-            parsed = parse_article(st.session_state.article)
+            # Determine if we should add the affiliate note
+            include_promotional = promotional_text is not None
+            parsed = parse_article(st.session_state.article, add_affiliate_note=include_promotional)
             st.session_state.article_data["processed_article"] = parsed
         
         # Together AI Image Generation
@@ -887,7 +900,7 @@ def main():
                 st.error("Please ensure your .env file has valid credentials for the selected site.")
             else:
                 try:
-                    parsed = parse_article(st.session_state.article)
+                    parsed = st.session_state.article_data["processed_article"]
                     media_info = None
                     if "image" in st.session_state.article_data:
                         image_data = st.session_state.article_data["image"]
