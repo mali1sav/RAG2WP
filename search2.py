@@ -22,12 +22,14 @@ from slugify import slugify
 
 load_dotenv()
 
-# Define site-specific edit URLs
+# Define site-specific edit URLs (ensure every site gets an edit link)
 SITE_EDIT_URLS = {
     "BITCOINIST": "https://bitcoinist.com/wp-admin/post.php?post={post_id}&action=edit&classic-editor",
     "NEWSBTC": "https://www.newsbtc.com/wp-admin/post.php?post={post_id}&action=edit&classic-editor",
     "ICOBENCH": "https://icobench.com/th/wp-admin/post.php?post={post_id}&action=edit&classic-editor",
-    "CRYPTONWS": "https://cryptonews.com/th/wp-admin/post.php?post={post_id}&action=edit&classic-editor"
+    "CRYPTONWS": "https://cryptonews.com/th/wp-admin/post.php?post={post_id}&action=edit&classic-editor",
+    "INSIDEBITCOINS": "https://insidebitcoins.com/wp-admin/post.php?post={post_id}&action=edit&classic-editor",
+    "COINDATAFLOW": "https://coindataflow.com/wp-admin/post.php?post={post_id}&action=edit&classic-editor"
 }
 
 # ------------------------------
@@ -246,6 +248,7 @@ def submit_article_to_wordpress(article, wp_url, username, wp_app_password, prim
     Submits the article to WordPress using the WP REST API.
     Choose between 'post' and 'page' via the content_type parameter.
     Sets Yoast SEO meta fields and auto-selects the featured image.
+    Always displays the edit link for every article.
     """
     # Deep normalization for article data
     while isinstance(article, list) and len(article) > 0:
@@ -294,11 +297,11 @@ def submit_article_to_wordpress(article, wp_url, username, wp_app_password, prim
             post = response.json()
             post_id = post.get('id')
             st.success(f"Article '{data['title']}' submitted successfully! ID: {post_id}")
-            if site_name in SITE_EDIT_URLS:
-                edit_url = SITE_EDIT_URLS[site_name].format(post_id=post_id)
-                st.markdown(f"[Click here to edit your draft article]({edit_url})")
-                import webbrowser
-                webbrowser.open(edit_url)
+            # Always generate and display the edit URL for every article.
+            edit_url = SITE_EDIT_URLS.get(site_name, f"{wp_url.rstrip('/')}/wp-admin/post.php?post={{post_id}}&action=edit&classic-editor").format(post_id=post_id)
+            st.markdown(f"[Click here to edit your draft article]({edit_url})")
+            import webbrowser
+            webbrowser.open(edit_url)
             return post
         else:
             st.error(f"Failed to submit article. Status: {response.status_code}")
@@ -756,6 +759,11 @@ def main():
             "url": os.getenv("INSIDEBITCOINS_WP_URL"),
             "username": os.getenv("INSIDEBITCOINS_WP_USERNAME"),
             "password": os.getenv("INSIDEBITCOINS_WP_APP_PASSWORD")
+        },
+        "COINDATAFLOW": {
+            "url": os.getenv("COINDATAFLOW_WP_URL"),
+            "username": os.getenv("COINDATAFLOW_WP_USERNAME"),
+            "password": os.getenv("COINDATAFLOW_WP_APP_PASSWORD")
         }
     }
     site_options = list(sites.keys())
