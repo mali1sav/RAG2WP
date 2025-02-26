@@ -630,8 +630,8 @@ Below is the source content (in markdown):
 
 Return ONLY valid JSON, no additional commentary.
 """
-        st.write("Prompt being sent to Gemini API:")
-        st.code(prompt, language='python')
+        with st.expander("Prompt being sent to Gemini API", expanded=False):
+            st.code(prompt, language='python')
         response = make_gemini_request(client, prompt)
         if not response:
             return {}
