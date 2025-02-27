@@ -495,6 +495,7 @@ def submit_article_to_wordpress(article, wp_url, username, wp_app_password, prim
     st.write("Submitting article with Yoast SEO fields...")
     st.write("Yoast Title:", article.get("yoast_title"))
     st.write("Yoast Meta Description:", article.get("yoast_metadesc"))
+    st.write("Selected site:", site_name)  # Debug: Show the site name being used
     
     # Get the content and apply affiliate links
     content = article.get("main_content", "")
@@ -536,6 +537,10 @@ def submit_article_to_wordpress(article, wp_url, username, wp_app_password, prim
             post = response.json()
             post_id = post.get('id')
             st.success(f"Article '{data['title']}' submitted successfully! ID: {post_id}")
+            
+            # Debug: Show available edit URLs
+            st.write("Available edit URLs:", list(SITE_EDIT_URLS.keys()))
+            
             # Always generate and display the edit URL for every article.
             edit_url = SITE_EDIT_URLS.get(site_name, f"{wp_url.rstrip('/')}/wp-admin/post.php?post={{post_id}}&action=edit&classic-editor").format(post_id=post_id)
             st.markdown(f"[Click here to edit your draft article]({edit_url})")
