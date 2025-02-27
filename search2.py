@@ -105,7 +105,7 @@ AFFILIATE_LINKS = {
         "Best Wallet Token": "https://bs_9f0cd602.Cryptorox.care",
         "Catslap": "https://bs_7425c4d9.Cryptorox.care"
     },
-    "CRYPTONWS": {
+    "CRYPTONEWS": {
         "Best Wallet": "https://bestwallettoken.com/th?tid=156",
         "Solaxy": "https://solaxy.io/th/?tid=156",
         "BTC Bull Token": "https://btcbulltoken.com/th?tid=156",
@@ -986,6 +986,11 @@ def main():
             "url": os.getenv("NEWSBTC_WP_URL"),
             "username": os.getenv("NEWSBTC_WP_USERNAME"),
             "password": os.getenv("NEWSBTC_WP_APP_PASSWORD")
+        },
+        "CRYPTONEWS": {
+            "url": os.getenv("CRYPTONEWS_WP_URL"),
+            "username": os.getenv("CRYPTONEWS_WP_USERNAME"),
+            "password": os.getenv("CRYPTONEWS_WP_APP_PASSWORD")
         },
         "INSIDEBITCOINS": {
             "url": os.getenv("INSIDEBITCOINS_WP_URL"),
