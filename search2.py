@@ -27,10 +27,237 @@ SITE_EDIT_URLS = {
     "BITCOINIST": "https://bitcoinist.com/wp-admin/post.php?post={post_id}&action=edit&classic-editor",
     "NEWSBTC": "https://www.newsbtc.com/wp-admin/post.php?post={post_id}&action=edit&classic-editor",
     "ICOBENCH": "https://icobench.com/th/wp-admin/post.php?post={post_id}&action=edit&classic-editor",
-    "CRYPTONWS": "https://cryptonews.com/th/wp-admin/post.php?post={post_id}&action=edit&classic-editor",
-    "INSIDEBITCOINS": "https://insidebitcoins.com/wp-admin/post.php?post={post_id}&action=edit&classic-editor",
-    "COINDATAFLOW": "https://coindataflow.com/wp-admin/post.php?post={post_id}&action=edit&classic-editor"
+    "CRYPTONEWS": "https://cryptonews.com/th/wp-admin/post.php?post={post_id}&action=edit&classic-editor",
+    "INSIDEBITCOINS": "https://insidebitcoins.com/th/wp-admin/post.php?post={post_id}&action=edit&classic-editor",
+    "COINDATAFLOW": "https://coindataflow.com/th/blog/wp-admin/post.php?post={post_id}&action=edit&classic-editor"
 }
+
+# Promotional Images Data Structure
+PROMOTIONAL_IMAGES = {
+    "Best Wallet": {
+        "url": "https://icobench.com/th/wp-content/uploads/sites/17/2025/02/best-wallet-1024x952-1.png",
+        "alt": "Best Wallet",
+        "width": "600",
+        "height": "558",
+        "class": "wp-image-1797 aligncenter"
+    },
+    "Solaxy": {
+        "url": "https://icobench.com/th/wp-content/uploads/sites/17/2025/02/solaxy-1.png",
+        "alt": "Solaxy Thailand",
+        "width": "600",
+        "height": "520",
+        "class": "alignnone size-full wp-image-2003"
+    },
+    "BTC Bull Token": {
+        "url": "https://icobench.com/th/wp-content/uploads/sites/17/2025/02/btc-bull-token.png",
+        "alt": "BTC Bull Token",
+        "width": "600",
+        "height": "408",
+        "class": "alignnone size-full wp-image-2009"
+    },
+    "Mind of Pepe": {
+        "url": "https://icobench.com/th/wp-content/uploads/sites/17/2025/02/mind-of-pepe-e1740672348698.png",
+        "alt": "Mind of Pepe",
+        "width": "600",
+        "height": "490",
+        "class": "alignnone size-full wp-image-2010"
+    },
+    "Meme Index": {
+        "url": "https://icobench.com/th/wp-content/uploads/sites/17/2025/02/memeindex.png",
+        "alt": "Meme Index",
+        "width": "600",
+        "height": "468",
+        "class": "alignnone size-full wp-image-2011"
+    },
+    "Catslap": {
+        "url": "https://icobench.com/th/wp-content/uploads/sites/17/2025/02/catslap.png",
+        "alt": "Catslap Token",
+        "width": "600",
+        "height": "514",
+        "class": "alignnone size-full wp-image-2013"
+    }
+};
+
+# Affiliate Links Data Structure
+AFFILIATE_LINKS = {
+    "ICOBENCH": {
+        "Best Wallet": "https://icobench.com/th/visit/bestwallettoken",
+        "Solaxy": "https://icobench.com/th/visit/solaxy",
+        "BTC Bull Token": "https://icobench.com/th/visit/bitcoin-bull",
+        "Mind of Pepe": "https://icobench.com/th/visit/mindofpepe",
+        "Meme Index": "https://icobench.com/th/visit/memeindex",
+        "Catslap": "https://icobench.com/th/visit/catslap"
+    },
+    "BITCOINIST": {
+        "Best Wallet": "https://bs_332b25fb.bitcoinist.care/",
+        "Solaxy": "https://bs_ddfb0f8c.bitcoinist.care/",
+        "BTC Bull Token": "https://bs_919798f4.bitcoinist.care/",
+        "Mind of Pepe": "https://bs_1f5417eb.bitcoinist.care/",
+        "Meme Index": "https://bs_89e992a3.bitcoinist.care",
+        "Catslap": "https://bs_362f7e64.bitcoinist.care/"
+    },
+    "COINDATAFLOW": {
+        "Best Wallet": "https://bs_75a55063.Cryptorox.care",
+        "Solaxy": "https://bs_baf1ac7c.Cryptorox.care",
+        "BTC Bull Token": "https://bs_d3f9bf50.Cryptorox.care",
+        "Mind of Pepe": "https://bs_770fab4c.Cryptorox.care",
+        "Meme Index": "https://bs_89204fe5.Cryptorox.care",
+        "Best Wallet Token": "https://bs_9f0cd602.Cryptorox.care",
+        "Catslap": "https://bs_7425c4d9.Cryptorox.care"
+    },
+    "CRYPTONWS": {
+        "Best Wallet": "https://bestwallettoken.com/th?tid=156",
+        "Solaxy": "https://solaxy.io/th/?tid=156",
+        "BTC Bull Token": "https://btcbulltoken.com/th?tid=156",
+        "Mind of Pepe": "https://mindofpepe.com/th?tid=156",
+        "Meme Index": "https://memeindex.com/?tid=156",
+        "Catslap": "https://catslaptoken.com/th?tid=156"
+    },
+    "INSIDEBITCOINS": {
+        "Best Wallet": "https://insidebitcoins.com/th/visit/best-wallet-token",
+        "Solaxy": "https://insidebitcoins.com/th/visit/solaxy",
+        "BTC Bull Token": "https://insidebitcoins.com/th/visit/bitcoin-bull",
+        "Mind of Pepe": "https://insidebitcoins.com/th/visit/mindofpepe",
+        "Meme Index": "https://insidebitcoins.com/th/visit/memeindex",
+        "Catslap": "https://insidebitcoins.com/th/visit/catslap"
+    }
+}
+
+def process_affiliate_links(content, website, project_name=None):
+    """
+    Scan content for anchor texts and replace with appropriate affiliate links.
+    If project_name is provided, also add the corresponding promotional image in the third section.
+    
+    Args:
+        content (str): The article content
+        website (str): The website to publish to (e.g., "ICOBENCH")
+        project_name (str, optional): Name of the promotional project to add image for
+        
+    Returns:
+        str: Content with affiliate links and promotional image inserted
+    """
+    if website not in AFFILIATE_LINKS:
+        return content
+    
+    # Process affiliate links
+    for anchor_text, link_url in AFFILIATE_LINKS[website].items():
+        # Use regex to ensure we're matching whole words only
+        pattern = r'\b' + re.escape(anchor_text) + r'\b'
+        replacement = f'<a href="{link_url}" target="_blank" rel="sponsored noopener">{anchor_text}</a>'
+        content = re.sub(pattern, replacement, content)
+    
+    # Add promotional image if project name is provided
+    if project_name and project_name in PROMOTIONAL_IMAGES:
+        img_data = PROMOTIONAL_IMAGES[project_name]
+        img_html = f'<img class="{img_data["class"]}" '
+        img_html += f'src="{img_data["url"]}" '
+        img_html += f'alt="{img_data["alt"]}" '
+        img_html += f'width="{img_data["width"]}" '
+        img_html += f'height="{img_data["height"]}" />\n\n'
+        
+        # Find the promotional section (typically the third section)
+        # Look for the third <h2> tag in the content
+        h2_tags = re.findall(r'<h2[^>]*>(.*?)</h2>', content)
+        
+        if len(h2_tags) >= 3:
+            # Insert the image after the third heading
+            third_heading = h2_tags[2]
+            pattern = f'<h2[^>]*>{re.escape(third_heading)}</h2>'
+            replacement = f'<h2>{third_heading}</h2>\n\n{img_html}'
+            content = re.sub(pattern, replacement, content)
+        else:
+            # If we can't find the third heading, add it before the conclusion
+            conclusion_pattern = r'<p>บทความนี้นำเสนอข้อมูลเกี่ยวกับ|<h2[^>]*>บทสรุป|<h2[^>]*>สรุป'
+            match = re.search(conclusion_pattern, content)
+            if match:
+                # Insert before the conclusion
+                pos = match.start()
+                content = content[:pos] + img_html + content[pos:]
+            else:
+                # If all else fails, add it at the end
+                content += "\n\n" + img_html
+    
+    return content
+
+def convert_to_gutenberg_format(content):
+    """
+    Convert standard HTML content to Gutenberg blocks format.
+    
+    Args:
+        content (str): Standard HTML content
+        
+    Returns:
+        str: Content formatted as Gutenberg blocks
+    """
+    # If content already contains Gutenberg blocks, return as is
+    if '<!-- wp:' in content:
+        return content
+    
+    # Process the content sequentially to maintain the original order
+    gutenberg_content = []
+    
+    # Use BeautifulSoup to parse the HTML content
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(content, 'html.parser')
+    
+    # Process each element in order
+    for element in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'ul', 'ol', 'img', 'figure']):
+        if element.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+            # Convert all headings to h2 for consistency
+            level = 2
+            gutenberg_content.append(f'<!-- wp:heading -->')
+            gutenberg_content.append(f'<h{level}>{element.get_text()}</h{level}>')
+            gutenberg_content.append(f'<!-- /wp:heading -->')
+        
+        elif element.name == 'p':
+            # Process paragraphs
+            gutenberg_content.append('<!-- wp:paragraph -->')
+            gutenberg_content.append(f'<p>{element.decode_contents()}</p>')
+            gutenberg_content.append('<!-- /wp:paragraph -->')
+        
+        elif element.name == 'ul':
+            # Process unordered lists
+            gutenberg_content.append('<!-- wp:list -->')
+            gutenberg_content.append(str(element))
+            gutenberg_content.append('<!-- /wp:list -->')
+        
+        elif element.name == 'ol':
+            # Process ordered lists
+            gutenberg_content.append('<!-- wp:list {"ordered":true} -->')
+            gutenberg_content.append(str(element))
+            gutenberg_content.append('<!-- /wp:list -->')
+        
+        elif element.name == 'img':
+            # Process images
+            align = 'center' if 'aligncenter' in element.get('class', []) else ''
+            attrs = {}
+            if align:
+                attrs['align'] = align
+            
+            gutenberg_content.append(f'<!-- wp:image {json.dumps(attrs)} -->')
+            gutenberg_content.append(f'<figure class="wp-block-image{" align" + align if align else ""}"><img src="{element.get("src", "")}" alt="{element.get("alt", "")}" class="{element.get("class", "")}" width="{element.get("width", "")}" height="{element.get("height", "")}"/></figure>')
+            gutenberg_content.append('<!-- /wp:image -->')
+        
+        elif element.name == 'figure':
+            # Process figure elements (which may contain images)
+            img = element.find('img')
+            if img:
+                align = 'center' if 'aligncenter' in element.get('class', []) else ''
+                attrs = {}
+                if align:
+                    attrs['align'] = align
+                
+                gutenberg_content.append(f'<!-- wp:image {json.dumps(attrs)} -->')
+                gutenberg_content.append(str(element))
+                gutenberg_content.append('<!-- /wp:image -->')
+    
+    # If no blocks were created, wrap the entire content in a paragraph block
+    if not gutenberg_content:
+        gutenberg_content.append('<!-- wp:paragraph -->')
+        gutenberg_content.append(f'<p>{content}</p>')
+        gutenberg_content.append('<!-- /wp:paragraph -->')
+    
+    return '\n'.join(gutenberg_content)
 
 # ------------------------------
 # Utility Functions
@@ -181,7 +408,7 @@ def parse_article(article_json, add_affiliate_note=False):
 
         # If user included promotional content, add the affiliate disclosure note
         if add_affiliate_note:
-            content_parts.append("[su_note note_color=\"#FAEFFF\"] เรามุ่งมั่นในการสร้างความโปร่งใสอย่างเต็มที่กับผู้อ่านของเรา บางเนื้อหาในเว็บไซต์อาจมีลิงก์พันธมิตร ซึ่งเราอาจได้รับค่าคอมมิชชั่นจากความร่วมมือเหล่านี้ [/su_note]")
+            content_parts.append("[su_note note_color=\"#FEFEEE\"] เรามุ่งมั่นในการสร้างความโปร่งใสอย่างเต็มที่กับผู้อ่านของเรา บางเนื้อหาในเว็บไซต์อาจมีลิงก์พันธมิตร ซึ่งเราอาจได้รับค่าคอมมิชชั่นจากความร่วมมือเหล่านี้ [/su_note]")
 
         return {
             "main_title": article['title'],
@@ -249,6 +476,9 @@ def submit_article_to_wordpress(article, wp_url, username, wp_app_password, prim
     Choose between 'post' and 'page' via the content_type parameter.
     Sets Yoast SEO meta fields and auto-selects the featured image.
     Always displays the edit link for every article.
+    
+    For posts, content is converted to Gutenberg blocks format.
+    If site_name is provided, affiliate links are inserted based on the site's configuration.
     """
     # Deep normalization for article data
     while isinstance(article, list) and len(article) > 0:
@@ -266,9 +496,18 @@ def submit_article_to_wordpress(article, wp_url, username, wp_app_password, prim
     st.write("Yoast Title:", article.get("yoast_title"))
     st.write("Yoast Meta Description:", article.get("yoast_metadesc"))
     
+    # Get the content and apply affiliate links
+    content = article.get("main_content", "")
+    if site_name and content:
+        content = process_affiliate_links(content, site_name)
+    
+    # Convert to Gutenberg format if it's a post
+    if content_type.lower() == "post":
+        content = convert_to_gutenberg_format(content)
+    
     data = {
         "title": article.get("main_title", ""),
-        "content": article.get("main_content", ""),
+        "content": content,  # Now contains affiliate links and possibly Gutenberg format
         "slug": article.get("seo_slug", ""),
         "status": "draft",
         "meta_input": {
@@ -536,10 +775,10 @@ def load_promotional_content():
     promo_files = [f for f in os.listdir(pr_folder) if f.endswith(".txt")]
     if not promo_files:
         return ""
-    promo_file = random.choice(promo_files)
-    promo_path = os.path.join(pr_folder, promo_file)
-    with open(promo_path, "r", encoding="utf-8") as f:
-        return f.read().strip()
+    promo_files = ["None"] + promo_files
+    selected_promo = "None"
+    promotional_text = None
+    return promotional_text
 
 def clean_source_content(content):
     """Clean source content by handling special characters and escape sequences"""
@@ -719,11 +958,9 @@ def main():
         promo_files = [f for f in os.listdir(pr_folder) if f.endswith(".txt")]
         if promo_files:
             promo_files = ["None"] + promo_files
-            selected_promo = st.sidebar.selectbox("Select promotional content:", promo_files)
+            selected_promo = st.sidebar.selectbox("Select promotional content:", list(PROMOTIONAL_IMAGES.keys()) + ["None"])
             if selected_promo != "None":
-                promo_path = os.path.join(pr_folder, selected_promo)
-                with open(promo_path, "r", encoding="utf-8") as f:
-                    promotional_text = f.read().strip()
+                promotional_text = selected_promo
             else:
                 promotional_text = None
         else:
@@ -739,11 +976,6 @@ def main():
             "url": os.getenv("ICOBENCH_WP_URL"),
             "username": os.getenv("ICOBENCH_WP_USERNAME"),
             "password": os.getenv("ICOBENCH_WP_APP_PASSWORD")
-        },
-        "CRYPTONEWS": {
-            "url": os.getenv("CRYPTONEWS_WP_URL"),
-            "username": os.getenv("CRYPTONEWS_WP_USERNAME"),
-            "password": os.getenv("CRYPTONEWS_WP_APP_PASSWORD")
         },
         "BITCOINIST": {
             "url": os.getenv("BITCOINIST_WP_URL"),
@@ -923,18 +1155,38 @@ def main():
                                 filename="generated_image.png",
                                 alt_text=alt_text
                             )
+                    # Prepare article data
                     article_data = {
                         "main_title": parsed.get("main_title", "No Title"),
-                        "main_content": markdown.markdown(parsed.get("main_content", "")),
+                        "main_content": parsed.get("main_content", ""),
                         "seo_slug": parsed.get("seo_slug", ""),
                         "excerpt": parsed.get("excerpt", ""),
                         "yoast_title": parsed.get("yoast_title", ""),
                         "yoast_metadesc": parsed.get("yoast_metadesc", ""),
                         "image": st.session_state.article_data.get("image") if "image" in st.session_state.article_data else {}
                     }
+                    
+                    # Add featured image if available
                     if media_info and "media_id" in media_info:
                         article_data["image"]["media_id"] = media_info["media_id"]
+                    
+                    # Get primary keyword for upload
                     primary_keyword_upload = keywords_input.splitlines()[0] if keywords_input.strip() else ""
+                    
+                    # Convert markdown to HTML
+                    article_data["main_content"] = markdown.markdown(article_data["main_content"])
+                    
+                    # Process content with promotional image and affiliate links
+                    if selected_promo != "None" and selected_site:
+                        try:
+                            article_data["main_content"] = process_affiliate_links(
+                                article_data["main_content"],
+                                selected_site,
+                                selected_promo  # Pass the selected promotional content name
+                            )
+                            st.success(f"Added promotional content for {selected_promo}")
+                        except Exception as e:
+                            st.error(f"Error processing affiliate links: {str(e)}")
                     submit_article_to_wordpress(
                         article_data, 
                         wp_url, 
