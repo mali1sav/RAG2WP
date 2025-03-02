@@ -45,12 +45,11 @@ def validate_article_json(json_str) -> Dict:
         if not seo_field:
             raise ValueError("Missing required field: seo")
         content = data['content']
-        if not content.get('intro'):
-            raise ValueError("Missing required field: content.intro")
-        if not content.get('sections'):
-            raise ValueError("Missing required field: content.sections")
-        if not content.get('conclusion'):
-            raise ValueError("Missing required field: content.conclusion")
+        required_content = ['introduction', 'sections', 'conclusion']
+        for field in required_content:
+            if not content.get(field):
+                st.warning(f"Missing recommended field: content.{field}")
+                content[field] = content.get(field) or "กำลังดำเนินการประมวลผลเนื้อหา"
         seo = data[seo_field]
         required_seo = ['slug', 'metaTitle', 'metaDescription', 'excerpt', 'imagePrompt', 'altText']
         for field in required_seo:

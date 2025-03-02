@@ -20,46 +20,18 @@ def init_gemini_client():
         st.error(f"Failed to initialize Gemini client: {str(e)}")
         return None
 
-def make_gemini_request(client, prompt):
-    """Make Gemini API request with retries and proper error handling.
-    If Gemini's response isn't valid JSON, return a fallback JSON structure using the raw text.
-    """
+def make_gemini_request(client, prompt, generation_config=None):
+    """Make request to Gemini API with updated configuration handling"""
     try:
-        for attempt in range(3):
-            try:
-                response = client['model'].generate_content(prompt)
-                if response and response.text:
-                    cleaned_text = clean_gemini_response(response.text)
-                    if not cleaned_text.strip().startswith("{"):
-                        st.warning("Gemini response is not valid JSON. Using raw text fallback.")
-                        lines = cleaned_text.splitlines()
-                        title = lines[0].strip() if lines else "Untitled"
-                        fallback_json = {
-                            "title": title,
-                            "content": {"intro": cleaned_text, "sections": [], "conclusion": ""},
-                            "seo": {
-                                "slug": title.lower().replace(' ', '-'),
-                                "metaTitle": title,
-                                "metaDescription": title,
-                                "excerpt": title,
-                                "imagePrompt": "",
-                                "altText": ""
-                            }
-                        }
-                        return fallback_json
-                    try:
-                        return validate_article_json(cleaned_text)
-                    except (json.JSONDecodeError, ValueError) as e:
-                        if attempt == 2:
-                            raise e
-                        st.warning("Invalid JSON format, retrying...")
-                        continue
-            except Exception as e:
-                if attempt == 2:
-                    raise e
-                st.warning(f"Retrying Gemini request (attempt {attempt+2}/3)...")
-                time.sleep(2**attempt)
-        raise Exception("Failed to get valid response from Gemini API after all retries")
+        model = client.get_model("models/gemini-pro")
+        response = model.generate_content(
+            prompt,
+            generation_config=generation_config or {
+                "temperature": 0.7,
+                "max_output_tokens": 4096
+            }
+        )
+        return response.text
     except Exception as e:
-        st.error(f"Error making Gemini request: {str(e)}")
-        raise
+        st.error(f"Gemini API Error: {str(e)}")
+        return None

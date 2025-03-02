@@ -409,7 +409,9 @@ def main():
             with col2:
                 if "pending_edit_url" in st.session_state:
                     st.success("Article uploaded successfully!")
-                    st.markdown(f"[Edit your article]({st.session_state.pending_edit_url})")
+                    edit_url = st.session_state.pending_edit_url
+                    st.markdown(f"[Edit your article]({edit_url})")
+                    del st.session_state.pending_edit_url  # Clear the pending edit URL after display
                     
         except json.JSONDecodeError as e:
             st.error(f"Invalid JSON format: {str(e)}")
