@@ -370,17 +370,43 @@ def parse_article(article_json, add_affiliate_note=False):
         if add_affiliate_note:
             content_parts.append("[su_note note_color=\"#FEFEEE\"] เรามุ่งมั่นในการสร้างความโปร่งใสอย่างเต็มที่กับผู้อ่านของเรา บางเนื้อหาในเว็บไซต์อาจมีลิงก์พันธมิตร ซึ่งเราอาจได้รับค่าคอมมิชชั่นจากความร่วมมือเหล่านี้ [/su_note]")
 
-        return {
-            "main_title": article['title'],
+        # Initialize result with default values
+        result = {
+            "main_title": "Untitled Article",
             "main_content": "\n\n".join(content_parts),
-            "yoast_title": article['seo']['metaTitle'],
-            "yoast_metadesc": article['seo']['metaDescription'] if len(article['seo']['metaDescription']) <= 160 \
-                              else article['seo']['metaDescription'][:157] + "...",
-            "seo_slug": article['seo']['slug'],
-            "excerpt": article['seo']['excerpt'],
-            "image_prompt": article['seo']['imagePrompt'],
-            "image_alt": article['seo']['altText']
+            "yoast_title": "",
+            "yoast_metadesc": "",
+            "seo_slug": "",
+            "excerpt": "",
+            "image_prompt": "",
+            "image_alt": ""
         }
+        
+        # Safely extract SEO fields with error handling
+        try:
+            result["main_title"] = article.get('title', "Untitled Article")
+            
+            # Check if SEO data exists and is a dictionary
+            seo_data = article.get('seo', {})
+            if not isinstance(seo_data, dict):
+                seo_data = {}
+                
+            # Extract SEO fields with appropriate validation and defaults
+            result["yoast_title"] = seo_data.get('metaTitle', result["main_title"])
+            
+            meta_desc = seo_data.get('metaDescription', '')
+            if meta_desc and len(meta_desc) > 160:
+                meta_desc = meta_desc[:157] + "..."
+            result["yoast_metadesc"] = meta_desc
+            
+            result["seo_slug"] = seo_data.get('slug', '')
+            result["excerpt"] = seo_data.get('excerpt', '')
+            result["image_prompt"] = seo_data.get('imagePrompt', '')
+            result["image_alt"] = seo_data.get('altText', '')
+        except Exception as e:
+            st.warning(f"Error extracting SEO fields: {str(e)}. Using default values.")
+            
+        return result
     except (json.JSONDecodeError, KeyError) as e:
         st.error(f"Failed to parse article JSON: {str(e)}")
         return {}
@@ -430,6 +456,141 @@ def upload_image_to_wordpress(b64_data, wp_url, username, wp_app_password, filen
         st.error(f"[Upload] Exception during image upload: {e}")
         return None
 
+def convert_to_gutenberg_format(content):
+    """
+    Convert standard HTML content to Gutenberg blocks format.
+    
+    Args:
+        content (str): Standard HTML content
+        
+    Returns:
+        str: Content formatted as Gutenberg blocks
+    """
+    # If content already contains Gutenberg blocks, return as is
+    if '<!-- wp:' in content:
+        return content
+    
+    try:
+        # Try to import BeautifulSoup
+        try:
+            from bs4 import BeautifulSoup
+            use_bs4 = True
+        except ImportError:
+            st.warning("BeautifulSoup (bs4) is not installed. Using fallback HTML parsing method.")
+            use_bs4 = False
+        
+        if use_bs4:
+            # Process the content sequentially to maintain the original order using BeautifulSoup
+            gutenberg_content = []
+            
+            # Use BeautifulSoup to parse the HTML content
+            soup = BeautifulSoup(content, 'html.parser')
+            
+            # Process each element in order
+            for element in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'ul', 'ol', 'img', 'figure']):
+                if element.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+                    # Convert all headings to h2 for consistency
+                    level = 2
+                    gutenberg_content.append(f'<!-- wp:heading -->')
+                    gutenberg_content.append(f'<h{level}>{element.get_text()}</h{level}>')
+                    gutenberg_content.append(f'<!-- /wp:heading -->')
+                
+                elif element.name == 'p':
+                    # Process paragraphs
+                    gutenberg_content.append('<!-- wp:paragraph -->')
+                    gutenberg_content.append(f'<p>{element.decode_contents()}</p>')
+                    gutenberg_content.append('<!-- /wp:paragraph -->')
+                
+                elif element.name == 'ul':
+                    # Process unordered lists
+                    gutenberg_content.append('<!-- wp:list -->')
+                    gutenberg_content.append(str(element))
+                    gutenberg_content.append('<!-- /wp:list -->')
+                
+                elif element.name == 'ol':
+                    # Process ordered lists
+                    gutenberg_content.append('<!-- wp:list {"ordered":true} -->')
+                    gutenberg_content.append(str(element))
+                    gutenberg_content.append('<!-- /wp:list -->')
+                
+                elif element.name == 'img':
+                    # Process images
+                    align = 'center' if 'aligncenter' in element.get('class', []) else ''
+                    attrs = {}
+                    if align:
+                        attrs['align'] = align
+                    
+                    gutenberg_content.append(f'<!-- wp:image {json.dumps(attrs)} -->')
+                    gutenberg_content.append(f'<figure class="wp-block-image{" align" + align if align else ""}">{str(element)}</figure>')
+                    gutenberg_content.append('<!-- /wp:image -->')
+                
+                elif element.name == 'figure':
+                    # Process figure elements (which may contain images)
+                    img = element.find('img')
+                    if img:
+                        align = 'center' if 'aligncenter' in element.get('class', []) else ''
+                        attrs = {}
+                        if align:
+                            attrs['align'] = align
+                        
+                        gutenberg_content.append(f'<!-- wp:image {json.dumps(attrs)} -->')
+                        gutenberg_content.append(str(element))
+                        gutenberg_content.append('<!-- /wp:image -->')
+            
+            # If no blocks were created, wrap the entire content in a paragraph block
+            if not gutenberg_content:
+                gutenberg_content.append('<!-- wp:paragraph -->')
+                gutenberg_content.append(f'<p>{content}</p>')
+                gutenberg_content.append('<!-- /wp:paragraph -->')
+            
+            return '\n'.join(gutenberg_content)
+        else:
+            # Fallback method using regex for basic HTML parsing
+            gutenberg_content = []
+            
+            # Process headings
+            heading_pattern = r'<h[1-6][^>]*>(.*?)</h[1-6]>'
+            for match in re.finditer(heading_pattern, content, re.DOTALL):
+                heading_text = re.sub(r'<.*?>', '', match.group(1))  # Remove any HTML tags inside heading
+                gutenberg_content.append('<!-- wp:heading -->')
+                gutenberg_content.append(f'<h2>{heading_text}</h2>')
+                gutenberg_content.append('<!-- /wp:heading -->')
+            
+            # Process paragraphs
+            paragraph_pattern = r'<p[^>]*>(.*?)</p>'
+            for match in re.finditer(paragraph_pattern, content, re.DOTALL):
+                paragraph_content = match.group(1)
+                gutenberg_content.append('<!-- wp:paragraph -->')
+                gutenberg_content.append(f'<p>{paragraph_content}</p>')
+                gutenberg_content.append('<!-- /wp:paragraph -->')
+            
+            # Process lists
+            list_pattern = r'<(ul|ol)[^>]*>(.*?)</\1>'
+            for match in re.finditer(list_pattern, content, re.DOTALL):
+                list_type = match.group(1)
+                list_content = match.group(0)
+                if list_type == 'ul':
+                    gutenberg_content.append('<!-- wp:list -->')
+                    gutenberg_content.append(list_content)
+                    gutenberg_content.append('<!-- /wp:list -->')
+                else:  # ol
+                    gutenberg_content.append('<!-- wp:list {"ordered":true} -->')
+                    gutenberg_content.append(list_content)
+                    gutenberg_content.append('<!-- /wp:list -->')
+            
+            # If no blocks were created or if we couldn't parse the HTML properly,
+            # wrap the entire content in a paragraph block
+            if not gutenberg_content:
+                gutenberg_content.append('<!-- wp:paragraph -->')
+                gutenberg_content.append(f'<p>{content}</p>')
+                gutenberg_content.append('<!-- /wp:paragraph -->')
+            
+            return '\n'.join(gutenberg_content)
+    except Exception as e:
+        st.error(f"Error converting to Gutenberg format: {str(e)}")
+        # Return the original content wrapped in a paragraph block as a fallback
+        return f'<!-- wp:paragraph -->\n<p>{content}</p>\n<!-- /wp:paragraph -->'
+
 def submit_article_to_wordpress(article, wp_url, username, wp_app_password, primary_keyword="", site_name=None, content_type="post"):
     """
     Submits the article to WordPress using the WP REST API.
@@ -440,28 +601,32 @@ def submit_article_to_wordpress(article, wp_url, username, wp_app_password, prim
     For posts, content is converted to Gutenberg blocks format.
     If site_name is provided, affiliate links are inserted based on the site's configuration.
     """
-    # Deep normalization for article data
-    while isinstance(article, list) and len(article) > 0:
-        article = article[0]
-    if not isinstance(article, dict):
-        article = {}
-
-    # Determine endpoint based on content_type
-    if content_type.lower() == "page":
-        endpoint = construct_endpoint(wp_url, "/wp-json/wp/v2/pages")
-    else:
-        endpoint = construct_endpoint(wp_url, "/wp-json/wp/v2/posts")
-
-    st.write("Submitting article with Yoast SEO fields...")
-    st.write("Yoast Title:", article.get("yoast_title"))
-    st.write("Yoast Meta Description:", article.get("yoast_metadesc"))
-    st.write("Selected site:", site_name)  # Debug: Show the site name being used
-
     try:
+        # Deep normalization for article data
+        while isinstance(article, list) and len(article) > 0:
+            article = article[0]
+        if not isinstance(article, dict):
+            article = {}
+
+        # Determine endpoint based on content_type
+        if content_type.lower() == "page":
+            endpoint = construct_endpoint(wp_url, "/wp-json/wp/v2/pages")
+        else:
+            endpoint = construct_endpoint(wp_url, "/wp-json/wp/v2/posts")
+
+        st.write("Submitting article with Yoast SEO fields...")
+        st.write("Yoast Title:", article.get("yoast_title"))
+        st.write("Yoast Meta Description:", article.get("yoast_metadesc"))
+        st.write("Selected site:", site_name)  # Debug: Show the site name being used
+
         # Get the content and apply affiliate links
         content = article.get("main_content", "")
         if site_name and content:
             content = process_affiliate_links(content, site_name)
+
+        # Convert to Gutenberg format if it's a post
+        if content_type.lower() == "post":
+            content = convert_to_gutenberg_format(content)
 
         # Get the original article JSON if available in session state
         article_json = None
@@ -522,33 +687,6 @@ def submit_article_to_wordpress(article, wp_url, username, wp_app_password, prim
 
     except Exception as e:
         st.error(f"Exception during article submission: {str(e)}")
-        return None
-    cat_tag_id = keyword_to_cat_tag[primary_keyword]
-    data["categories"] = [cat_tag_id]
-    data["tags"] = [cat_tag_id]
-
-    try:
-        response = requests.post(endpoint, json=data, auth=HTTPBasicAuth(username, wp_app_password))
-        if response.status_code in (200, 201):
-            post = response.json()
-            post_id = post.get('id')
-            st.success(f"Article '{data['title']}' submitted successfully! ID: {post_id}")
-
-            # Debug: Show available edit URLs
-            st.write("Available edit URLs:", list(SITE_EDIT_URLS.keys()))
-
-            # Always generate and display the edit URL for every article.
-            edit_url = SITE_EDIT_URLS.get(site_name, f"{wp_url.rstrip('/')}/wp-admin/post.php?post={{post_id}}&action=edit&classic-editor").format(post_id=post_id)
-            st.markdown(f"[Click here to edit your draft article]({edit_url})")
-            import webbrowser
-            webbrowser.open(edit_url)
-            return post
-        else:
-            st.error(f"Failed to submit article. Status: {response.status_code}")
-            st.error(f"Response: {response.text}")
-            return None
-    except Exception as e:
-        st.error(f"Exception during article submission: {e}")
         return None
 
 # ------------------------------
@@ -1377,64 +1515,117 @@ def main():
                     st.error("Please ensure your .env file has valid credentials for the selected site.")
                 else:
                     try:
-                        parsed = st.session_state.article_data["processed_article"]
-                        media_info = None
-                        if "image" in st.session_state.article_data:
-                            image_data = st.session_state.article_data["image"]
-                            if image_data.get("b64_data"):
-                                article_json = json.loads(st.session_state.article)
-                                alt_text = article_json['seo']['altText']
-                                media_info = upload_image_to_wordpress(
-                                    image_data["b64_data"],
-                                    wp_url,
-                                    wp_username,
-                                    wp_app_password,
-                                    filename="generated_image.png",
-                                    alt_text=alt_text
-                                )
-                        # Prepare article data
-                        article_data = {
-                            "main_title": parsed.get("main_title", "No Title"),
-                            "main_content": parsed.get("main_content", ""),
-                            "seo_slug": parsed.get("seo_slug", ""),
-                            "excerpt": parsed.get("excerpt", ""),
-                            "yoast_title": parsed.get("yoast_title", ""),
-                            "yoast_metadesc": parsed.get("yoast_metadesc", ""),
-                            "image": st.session_state.article_data.get("image") if "image" in st.session_state.article_data else {}
-                        }
-
-                        # Add featured image if available
-                        if media_info and "media_id" in media_info:
-                            article_data["image"]["media_id"] = media_info["media_id"]
-
-                        # Get primary keyword for upload
-                        primary_keyword_upload = keywords_input.splitlines()[0] if keywords_input.strip() else ""
-
-                        # Convert markdown to HTML
-                        article_data["main_content"] = markdown.markdown(article_data["main_content"])
-
-                        # Process content with promotional image and affiliate links
-                        if selected_promo != "None" and selected_site:
+                        with st.spinner("Processing article for upload..."):
+                            # Verify we have processed article data
+                            if "article_data" not in st.session_state or not st.session_state.article_data:
+                                st.error("No article data found. Please generate the article first.")
+                                return
+                                
+                            if "processed_article" not in st.session_state.article_data or not st.session_state.article_data["processed_article"]:
+                                st.error("Article hasn't been properly processed. Try regenerating the article.")
+                                return
+                                
+                            parsed = st.session_state.article_data["processed_article"]
+                            if not parsed or not isinstance(parsed, dict):
+                                st.error("Invalid article data format. Please regenerate the article.")
+                                return
+                                
+                            media_info = None
+                            alt_text = ""
+                            
+                            # Handle image upload with comprehensive error handling
                             try:
-                                article_data["main_content"] = process_affiliate_links(
-                                    article_data["main_content"],
-                                    selected_site,
-                                    selected_promo  # Pass the selected promotional content name
-                                )
-                                st.success(f"Added promotional content for {selected_promo}")
-                            except Exception as e:
-                                st.error(f"Error processing affiliate links: {str(e)}")
-                        submit_article_to_wordpress(
-                            article_data,
-                            wp_url,
-                            wp_username,
-                            wp_app_password,
-                            primary_keyword=primary_keyword_upload,
-                            site_name=selected_site,
-                            content_type=content_type_choice  # Pass selected content type ("Post" or "Page")
-                        )
+                                if "image" in st.session_state.article_data and st.session_state.article_data["image"]:
+                                    image_data = st.session_state.article_data["image"]
+                                    if image_data and isinstance(image_data, dict) and image_data.get("b64_data"):
+                                        try:
+                                            # Try to get alt text from article JSON first
+                                            article_json = json.loads(st.session_state.article) if st.session_state.article else {}
+                                            if isinstance(article_json, dict) and "seo" in article_json and isinstance(article_json["seo"], dict):
+                                                alt_text = article_json["seo"].get("altText", "Generated Image")
+                                            else:
+                                                alt_text = image_data.get("alt_text", "Generated Image")
+                                        except json.JSONDecodeError as e:
+                                            st.warning(f"Could not parse article JSON for alt text: {str(e)}")
+                                            alt_text = image_data.get("alt_text", "Generated Image")
+                                            
+                                        st.info(f"Uploading featured image with alt text: {alt_text}")
+                                        media_info = upload_image_to_wordpress(
+                                            image_data["b64_data"],
+                                            wp_url,
+                                            wp_username,
+                                            wp_app_password,
+                                            filename="generated_image.png",
+                                            alt_text=alt_text
+                                        )
+                            except Exception as img_error:
+                                st.warning(f"Error uploading image: {str(img_error)}. Continuing with article upload without featured image.")
+                                        
+                            # Prepare article data with validation
+                            article_data = {
+                                "main_title": parsed.get("main_title", "No Title"),
+                                "main_content": parsed.get("main_content", ""),
+                                "seo_slug": parsed.get("seo_slug", ""),
+                                "excerpt": parsed.get("excerpt", ""),
+                                "yoast_title": parsed.get("yoast_title", ""),
+                                "yoast_metadesc": parsed.get("yoast_metadesc", ""),
+                                "image": st.session_state.article_data.get("image", {}) if isinstance(st.session_state.article_data.get("image"), dict) else {}
+                            }
+
+                            # Add featured image if available
+                            if media_info and isinstance(media_info, dict) and "media_id" in media_info:
+                                article_data["image"]["media_id"] = media_info["media_id"]
+
+                            # Get primary keyword for upload with validation
+                            primary_keyword_upload = ""
+                            if isinstance(keywords_input, str) and keywords_input.strip():
+                                lines = keywords_input.splitlines()
+                                if lines and lines[0].strip():
+                                    primary_keyword_upload = lines[0].strip()
+
+                            # Convert markdown to HTML with error handling
+                            try:
+                                if "main_content" in article_data and article_data["main_content"]:
+                                    article_data["main_content"] = markdown.markdown(article_data["main_content"])
+                            except Exception as md_error:
+                                st.warning(f"Error converting markdown to HTML: {str(md_error)}. Using plain text instead.")
+
+                            # Process content with promotional image and affiliate links
+                            if selected_promo != "None" and selected_site:
+                                try:
+                                    article_data["main_content"] = process_affiliate_links(
+                                        article_data["main_content"],
+                                        selected_site,
+                                        selected_promo  # Pass the selected promotional content name
+                                    )
+                                    st.success(f"Added promotional content for {selected_promo}")
+                                except Exception as aff_error:
+                                    st.warning(f"Error processing affiliate links: {str(aff_error)}. Continuing without promotional content.")
+                                    
+                            # Final validation before submission
+                            if not article_data["main_content"] or not article_data["main_title"]:
+                                st.error("Article content or title is empty. Cannot proceed with upload.")
+                                return
+                                
+                            # Submit article to WordPress
+                            st.info("Submitting article to WordPress...")
+                            result = submit_article_to_wordpress(
+                                article_data,
+                                wp_url,
+                                wp_username,
+                                wp_app_password,
+                                primary_keyword=primary_keyword_upload,
+                                site_name=selected_site,
+                                content_type=content_type_choice  # Pass selected content type ("Post" or "Page")
+                            )
+                            
+                            if not result:
+                                st.error("Upload failed. Please check the error messages above.")
                     except Exception as e:
                         st.error(f"Error during upload process: {str(e)}")
+                        # Add logging for debugging
+                        import traceback
+                        st.error(f"Error details: {traceback.format_exc()}")
 
 if __name__ == "__main__":
     main()
