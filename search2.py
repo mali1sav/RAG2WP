@@ -1192,7 +1192,7 @@ Return ONLY valid JSON, no additional commentary.
             content = json.loads(response)
             if isinstance(content, list):
                 content = content[0]
-            if content else {}:
+            if not content:
                 pass
             if not isinstance(content, dict):
                 st.error("Response is not a valid dictionary")
