@@ -829,11 +829,11 @@ def load_promotional_content():
 
 def clean_source_content(content):
     """Clean source content by handling special characters and escape sequences"""
-    content = content.replace('!\[', '![')
-    content = content.replace('\\[', '[')
-    content = content.replace('\\]', ']')
-    content = content.replace('\\(', '(')
-    content = content.replace('\\)', ')')
+    content = content.replace('!\\[', '![')
+    content = content.replace('\\\[', '[')
+    content = content.replace('\\\]', ']')
+    content = content.replace('\\\(', '(')
+    content = content.replace('\\\)', ')')
     return content
 
 def get_promotional_image(promotional_text):
