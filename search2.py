@@ -1181,15 +1181,17 @@ Return ONLY valid JSON, no additional commentary.
 # Main App Function
 # ------------------------------
 
-def main():
+def handle_browser_redirect():
     if 'pending_edit_url' in st.session_state:
         import webbrowser
         webbrowser.open(st.session_state.pending_edit_url)
         del st.session_state.pending_edit_url
+        st.experimental_rerun()
 
-    st.title("Article Generator and Publisher")
+def main():
     handle_browser_redirect()
 
+    st.title("Article Generator and Publisher")
     default_url = ""
     default_keyword = "Bitcoin"
     default_news_angle = ""
@@ -1634,9 +1636,4 @@ def main():
                         st.error(f"Error details: {traceback.format_exc()}")
 
 if __name__ == "__main__":
-    def handle_browser_redirect():
-        import streamlit.web.server
-        if streamlit.web.server.get_current_route() != "/":
-            streamlit.web.server.set_current_route("/")
-
     main()
