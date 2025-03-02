@@ -1,4 +1,5 @@
 youtube-transcript-api
+<<<<<<< HEAD
 streamlit
 openai
 python-dotenv
@@ -17,4 +18,15 @@ markdown
 slugify
 youtube-transcript-api
 requests
+=======
+together
+google-generativeai
+pydantic
+python-slugify==8.0.1
+tenacity
+streamlit
+requests
+python-dotenv
+markdown
+>>>>>>> origin/main
 beautifulsoup4
