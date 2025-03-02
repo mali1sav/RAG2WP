@@ -93,27 +93,8 @@ def generate_article(client, transcripts, keywords=None, news_angle=None, sectio
             generation_config={
                 "temperature": 0.7,
                 "max_output_tokens": 4096,
-                "response_mime_type": "application/json",
-                "response_schema": {
-                    "type": "object",
-                    "properties": {
-                        "content": {
-                            "type": "object",
-                            "properties": {
-                                "sections": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "object",
-                                        "properties": {
-                                            "heading": {"type": "string"},
-                                            "content": {"type": "string"}
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                # Removed unsupported parameters
+                # Using JSON parsing in make_gemini_request instead
             }
         )
         if not response:
