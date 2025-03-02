@@ -15,8 +15,8 @@ def init_gemini_client():
             st.error("Gemini API key not found. Please set GEMINI_API_KEY in your environment variables.")
             return None
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-pro')
-        return {'model': model, 'name': 'gemini-pro'}
+        model = genai.GenerativeModel('gemini-2.0-flash')
+        return {'model': model, 'name': 'gemini-2.0-flash'}
     except Exception as e:
         st.error(f"Failed to initialize Gemini client: {str(e)}")
         return None
