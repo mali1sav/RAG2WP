@@ -677,8 +677,8 @@ def submit_article_to_wordpress(article, wp_url, username, wp_app_password, prim
             # Always generate and display the edit URL for every article.
             edit_url = SITE_EDIT_URLS.get(site_name, f"{wp_url.rstrip('/')}/wp-admin/post.php?post={{post_id}}&action=edit&classic-editor").format(post_id=post_id)
             st.markdown(f"[Click here to edit your draft article]({edit_url})")
-            import webbrowser
-            webbrowser.open(edit_url)
+            st.session_state.pending_edit_url = edit_url
+            st.experimental_rerun()
             return post
         else:
             st.error(f"Failed to submit article. Status: {response.status_code}")
@@ -1182,7 +1182,13 @@ Return ONLY valid JSON, no additional commentary.
 # ------------------------------
 
 def main():
-    st.set_page_config(page_title="Generate and Upload Article", layout="wide")
+    if 'pending_edit_url' in st.session_state:
+        import webbrowser
+        webbrowser.open(st.session_state.pending_edit_url)
+        del st.session_state.pending_edit_url
+
+    st.title("Article Generator and Publisher")
+    handle_browser_redirect()
 
     default_url = ""
     default_keyword = "Bitcoin"
@@ -1628,4 +1634,9 @@ def main():
                         st.error(f"Error details: {traceback.format_exc()}")
 
 if __name__ == "__main__":
+    def handle_browser_redirect():
+        import streamlit.web.server
+        if streamlit.web.server.get_current_route() != "/":
+            streamlit.web.server.set_current_route("/")
+
     main()
