@@ -829,11 +829,11 @@ def load_promotional_content():
 
 def clean_source_content(content):
     """Clean source content by handling special characters and escape sequences"""
-    content = content.replace('!\\[', '![')
-    content = content.replace('\\\[', '[')
-    content = content.replace('\\\]', ']')
-    content = content.replace('\\\(', '(')
-    content = content.replace('\\\)', ')')
+    content = content.replace(r'!\[', '![') 
+    content = content.replace(r'\[', '[') 
+    content = content.replace(r'\]', ']') 
+    content = content.replace(r'\(', '(') 
+    content = content.replace(r'\)', ')') 
     return content
 
 def get_promotional_image(promotional_text):
@@ -1272,6 +1272,18 @@ def main():
 
                     except Exception as e:
                         st.error(f"Error processing section content: {str(e)}")
+
+                    # Try to display Twitter embeds
+                    try:
+                        if 'media' in article_json and 'twitter_embeds' in article_json['media']:
+                            section_tweets = [tweet for tweet in article_json['media']['twitter_embeds']
+                                            if tweet.get('placement', '').startswith(f'sections[{i}]')]
+                            for tweet in section_tweets:
+                                if tweet.get('url'):
+                                    st.markdown(f"**Twitter/X Post**: {tweet['url']}")
+                                    st.markdown("")
+                    except Exception as e:
+                        st.error(f"Error processing Twitter embeds: {str(e)}")
 
                 # Display promotional content before conclusion
                 if 'media' in article_json and 'images' in article_json['media']:
