@@ -350,14 +350,33 @@ def fix_thai_json(json_str):
             pos = match.end()
             json_str = json_str[:pos] + "}" + json_str[pos:]
     
-    # Fix 3: Balance braces overall
+    # Fix 3: Add missing commas between properties in nested objects
+    # This regex looks for patterns like "key": "value"
+    # followed by "key2": "value2" without a comma
+    json_str = re.sub(r'("[^"]+"\s*:\s*"[^"]*")\s*("[^"]+")', r'\1,\2', json_str)
+    
+    # Fix 4: Add missing commas after closing braces in nested objects
+    # This regex looks for patterns like } followed by "key": without a comma
+    json_str = re.sub(r'(\})\s*("[^"]+"\s*:)', r'\1,\2', json_str)
+    
+    # Fix 5: Handle specific case of missing comma after nested object
+    # This targets the pattern in the error message (line 7 column 6)
+    json_str = re.sub(r'(\})\s*\n\s*("[^"]+")', r'\1,\n\2', json_str)
+    
+    # Fix 6: Add missing commas between sections and after nested objects
+    json_str = re.sub(r'(\})\s*\n\s*([^\s\{\}])', r'\1,\n\2', json_str)
+    
+    # Fix 7: Handle specific error for Thai content with missing commas before sections
+    # This specifically handles the case where a nested object like 'intro' is followed by other properties
+    json_str = re.sub(r'("intro"\s*:\s*\{[^\}]+\})\s*("[^"]+")', r'\1,\2', json_str)
+    
+    # Fix 8: Balance braces overall
     open_count = json_str.count('{')
     close_count = json_str.count('}')
     if open_count > close_count:
         json_str = json_str + ('}' * (open_count - close_count))
     
     return json_str
-
 def sanitize_json_strings(json_str):
     """Sanitize and escape problematic characters in JSON strings."""
     # Pattern to find all string literals in JSON
@@ -367,6 +386,8 @@ def sanitize_json_strings(json_str):
     replacements = [
         # Escape dollar sign in cryptocurrency symbols
         (r'(?<=[^\\])\$(\w+)', r'\\$\1'),
+        # Escape all dollar signs more aggressively - especially for Thai content
+        (r'\$', r'\\$'),
         # Fix other problematic characters if needed
         (r'(?<=[^\\])\\(?![\\"/bfnrt])', r'\\\\')
     ]
@@ -383,13 +404,9 @@ def sanitize_json_strings(json_str):
         return f'"{content}"'
     
     # Apply replacements to all string literals in the JSON
-    return string_pattern.sub(replace_in_string, json_str)
-
-def clean_source_content(content):
-    """Clean source content by handling special characters and escape sequences"""
-    content = content.replace(r'!\[', '![') 
-    content = content.replace(r'\[', '[') 
-    content = content.replace(r'\]', ']') 
-    content = content.replace(r'\(', '(') 
-    content = content.replace(r'\)', ')') 
-    return content
+    sanitized = string_pattern.sub(replace_in_string, json_str)
+    
+    # Also fix missing commas between properties at the top level
+    sanitized = re.sub(r'("[^"]+"\s*:\s*"[^"]*")\s*("[^"]+"\s*:)', r'\1,\2', sanitized)
+    
+    return sanitized
