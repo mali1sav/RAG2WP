@@ -3,7 +3,19 @@ import json
 import re
 import streamlit as st
 from modules.generation.gemini import make_gemini_request
-from modules.generation.validation import clean_source_content, fix_thai_json, contains_thai_text, sanitize_json_strings
+from modules.generation.validation import fix_thai_json, contains_thai_text, sanitize_json_strings
+
+def clean_source_content(content):
+    """
+    Clean and prepare source content for processing.
+    """
+    if not content:
+        return ""
+    # Remove extra whitespace and normalize line endings
+    content = re.sub(r'\s+', ' ', content).strip()
+    # Remove any control characters
+    content = ''.join(char for char in content if ord(char) >= 32 or char in '\n\t')
+    return content
 
 def prepare_source_data(transcripts):
     """
