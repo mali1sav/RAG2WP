@@ -30,32 +30,70 @@ def clean_gemini_response(text):
 def validate_article_json(json_str) -> Dict:
     """Validate article JSON against schema and return cleaned data."""
     try:
-        data = json.loads(json_str)
+        # First, try to parse the JSON string
+        try:
+            data = json.loads(json_str)
+        except json.JSONDecodeError as e:
+            # Try to fix common JSON formatting issues
+            fixed_json = json_str.strip()
+            if not fixed_json.endswith('}'):
+                fixed_json += '}'
+            try:
+                data = json.loads(fixed_json)
+            except json.JSONDecodeError:
+                st.error(f"Invalid JSON structure: {str(e)}")
+                st.code(json_str, language="json")
+                return {}
+        
+        # Handle list or non-dict data
         if isinstance(data, list):
             data = next((item for item in data if isinstance(item, dict)), {})
         elif not isinstance(data, dict):
             data = {}
+            
         if not data:
+            st.error("Empty or invalid article data")
             return {}
-        if not data.get('title'):
-            raise ValueError("Missing required field: title")
+            
+        # Validate and auto-fix content structure
         if not data.get('content'):
-            raise ValueError("Missing required field: content")
-        seo_field = next((k for k in data.keys() if k.lower() == 'seo'), None)
-        if not seo_field:
-            raise ValueError("Missing required field: seo")
+            data['content'] = {}
+            
         content = data['content']
-        required_content = ['introduction', 'sections', 'conclusion']
-        for field in required_content:
-            if not content.get(field):
-                st.warning(f"Missing recommended field: content.{field}")
-                content[field] = content.get(field) or "กำลังดำเนินการประมวลผลเนื้อหา"
-        seo = data[seo_field]
-        required_seo = ['slug', 'metaTitle', 'metaDescription', 'excerpt', 'imagePrompt', 'altText']
-        for field in required_seo:
-            if not seo.get(field):
-                raise ValueError(f"Missing required SEO field: {field}")
+        if isinstance(content.get('intro'), dict):
+            content['introduction'] = content.pop('intro')
+        elif not content.get('introduction'):
+            content['introduction'] = content.get('intro', "")
+            
+        if 'sections' not in content:
+            content['sections'] = []
+            
+        if 'conclusion' not in content:
+            content['conclusion'] = ""
+            
+        # Ensure SEO structure exists
+        if 'seo' not in data:
+            data['seo'] = {}
+            if data.get('title'):
+                data['seo'].update({
+                    'slug': re.sub(r'[^\w\s-]', '', data['title'].lower()).replace(' ', '-'),
+                    'metaTitle': data['title'],
+                    'metaDescription': str(content.get('introduction', {})).strip()[:155],
+                    'excerpt': str(content.get('introduction', {})).strip()[:100],
+                    'imagePrompt': "",
+                    'altText': data['title']
+                })
+                
+        # Ensure media structure exists
+        if 'media' not in data:
+            data['media'] = {'images': [], 'twitter_embeds': []}
+            
         return data
+            
+    except Exception as e:
+        st.error(f"Error validating article data: {str(e)}")
+        st.code(json_str, language="json")
+        return {}
     except json.JSONDecodeError as e:
         st.error(f"Invalid JSON: {str(e)}")
         st.code(json_str, language="json")
