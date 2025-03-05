@@ -4,6 +4,7 @@ Handles conversion between Markdown, HTML, and Gutenberg blocks.
 """
 import re
 import json
+import html
 import logging
 import streamlit as st
 
@@ -78,7 +79,7 @@ def convert_to_gutenberg_format(content):
                         # If paragraph contains an image, handle it separately
                         for img in element.find_all('img'):
                             gutenberg_content.append('<!-- wp:image -->')
-                            gutenberg_content.append(f'<figure class="wp-block-image"><img src="{img.get("src", "")}" alt="{img.get("alt", "")}" /></figure>')
+                            gutenberg_content.append(f'<figure class="wp-block-image"><img src="{img.get("src", "")}" alt="{html.escape(img.get("alt", ""))}" /></figure>')
                             gutenberg_content.append('<!-- /wp:image -->')
                             
                             # Remove the img from paragraph
@@ -152,9 +153,9 @@ def convert_to_gutenberg_format(content):
                         
                         gutenberg_content.append(f'<!-- wp:image {json.dumps(attrs)} -->')
                         if caption_text:
-                            gutenberg_content.append(f'<figure class="wp-block-image{" align" + align if align else ""}"><img src="{img.get("src", "")}" alt="{img.get("alt", "")}"/><figcaption>{caption_text}</figcaption></figure>')
+                            gutenberg_content.append(f'<figure class="wp-block-image{" align" + align if align else ""}"><img src="{img.get("src", "")}" alt="{html.escape(img.get("alt", ""))}"/><figcaption>{html.escape(caption_text)}</figcaption></figure>')
                         else:
-                            gutenberg_content.append(f'<figure class="wp-block-image{" align" + align if align else ""}"><img src="{img.get("src", "")}" alt="{img.get("alt", "")}"/></figure>')
+                            gutenberg_content.append(f'<figure class="wp-block-image{" align" + align if align else ""}"><img src="{img.get("src", "")}" alt="{html.escape(img.get("alt", ""))}"/></figure>')
                         gutenberg_content.append('<!-- /wp:image -->')
             
             # If no blocks were created, wrap the entire content in a paragraph block
@@ -205,7 +206,7 @@ def convert_to_gutenberg_format(content):
                 alt_text = alt_match.group(1) if alt_match else ""
                 
                 gutenberg_content.append('<!-- wp:image -->')
-                gutenberg_content.append(f'<figure class="wp-block-image"><img src="{match.group(1)}" alt="{alt_text}" /></figure>')
+                gutenberg_content.append(f'<figure class="wp-block-image"><img src="{match.group(1)}" alt="{html.escape(alt_text)}" /></figure>')
                 gutenberg_content.append('<!-- /wp:image -->')
             
             # Process lists
