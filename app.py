@@ -430,5 +430,31 @@ def main():
             st.error(f"Invalid JSON format: {str(e)}")
             st.text_area("Raw Content", value=st.session_state.article, height=300)
 
+# Configure static file serving
+def serve_static_files():
+    """Set up static file serving for images and other assets"""
+    import os
+    from pathlib import Path
+    
+    # Get the absolute path to the static directory
+    static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+    
+    # Create the directory if it doesn't exist
+    os.makedirs(os.path.join(static_dir, "images"), exist_ok=True)
+    
+    # Register the static directory with Streamlit
+    return static_dir
+
 if __name__ == "__main__":
+    # Set up static file serving
+    static_dir = serve_static_files()
+    
+    # Set page configuration
+    st.set_page_config(page_title="RAG to WP", layout="wide")
+    
+    # Store static directory path in session state
+    if "static_dir" not in st.session_state:
+        st.session_state["static_dir"] = static_dir
+    
+    # Run the main application
     main()
