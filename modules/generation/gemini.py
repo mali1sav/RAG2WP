@@ -28,19 +28,57 @@ def init_gemini_client():
     retry_error_callback=lambda retry_state: None
 )
 def clean_gemini_response(text):
-    """Clean Gemini response to extract valid JSON."""
+    """Clean Gemini response to extract valid JSON with enhanced Thai language support."""
+    # First try to extract JSON from code blocks
     json_match = re.search(r'```(?:json)?\s*({[\s\S]*?})\s*```', text)
     if json_match:
-        return json_match.group(1).strip()
+        extracted = json_match.group(1).strip()
+        # Check for specific incomplete patterns
+        if "intro" in extracted and "Part 1" in extracted and "Part 2" in extracted:
+            # Check if the intro object is complete
+            if not re.search(r'"intro"\s*:\s*\{[^{}]*\}', extracted):
+                # It's incomplete, add closing brace
+                extracted = re.sub(r'("Part 2"\s*:\s*"[^"]*")\s*$', r'\1}', extracted)
+        return extracted
+        
+    # Then try to find JSON pattern in the text
     json_match = re.search(r'({[\s\S]*?})', text)
     if json_match:
-        return json_match.group(1).strip()
+        extracted = json_match.group(1).strip()
+        # Check for specific incomplete patterns
+        if "intro" in extracted and "Part 1" in extracted and "Part 2" in extracted:
+            # Check if the intro object is complete
+            if not re.search(r'"intro"\s*:\s*\{[^{}]*\}', extracted):
+                # It's incomplete, add closing brace
+                extracted = re.sub(r'("Part 2"\s*:\s*"[^"]*")\s*$', r'\1}', extracted)
+        return extracted
+        
+    # Remove code markers
     text = re.sub(r'```(?:json)?\s*|```', '', text)
     text = text.strip()
+    
+    # Fix common issues
+    # 1. Fix missing commas between properties
+    text = re.sub(r'"([^"]+)"\s*:\s*"([^"]*)"\s+"', '"\1": "\2", "', text)
+    
+    # 2. Check if intro object is incomplete
+    intro_match = re.search(r'"intro"\s*:\s*\{\s*"Part 1"[^{}]*"Part 2"[^{}]*$', text)
+    if intro_match and not text.endswith("}"):
+        text = text + "}"
+    
+    # Ensure proper JSON structure
     if not text.startswith('{'):
         text = '{' + text
     if not text.endswith('}'):
         text = text + '}'
+        
+    # Balance brace counts
+    open_count = text.count('{')
+    close_count = text.count('}')
+    
+    if open_count > close_count:
+        text = text + ('}' * (open_count - close_count))
+    
     return text
 
 def validate_article_json(json_str):
@@ -96,7 +134,17 @@ def make_gemini_request(client, prompt, generation_config=None):
                     }
                 )
                 if response and response.text:
-                    cleaned_text = clean_gemini_response(response.text)
+                    # Pre-process the response to fix incomplete JSON structures
+                    raw_text = response.text
+                    
+                    # Direct fix for the specific case of incomplete intro objects
+                    intro_missing_close = re.search(r'\{\s*"title".*"content"\s*:\s*\{\s*"intro"\s*:\s*\{\s*"Part 1"\s*:.*"Part 2"\s*:.*\}\s*$', raw_text, re.DOTALL)
+                    if intro_missing_close:
+                        # Add the missing closing braces
+                        st.info("Detected incomplete intro object, fixing structure...")
+                        raw_text = raw_text + "}}}" 
+                    
+                    cleaned_text = clean_gemini_response(raw_text)
                     if not cleaned_text.strip().startswith("{"):
                         st.warning("Gemini response is not valid JSON. Using raw text fallback.")
                         lines = cleaned_text.splitlines()

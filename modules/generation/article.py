@@ -3,7 +3,7 @@ import json
 import re
 import streamlit as st
 from modules.generation.gemini import make_gemini_request
-from modules.generation.validation import clean_source_content
+from modules.generation.validation import clean_source_content, fix_thai_json, contains_thai_text, sanitize_json_strings
 
 def prepare_source_data(transcripts):
     """
@@ -108,6 +108,42 @@ def generate_article(client, transcripts, keywords=None, news_angle=None, sectio
             
         # Parse and validate the response
         try:
+            # Check for Thai content first for specialized handling
+            if contains_thai_text(response):
+                st.info("Detected Thai content in the response, applying specialized fixes")
+                fixed_response = fix_thai_json(response)
+                try:
+                    content = json.loads(fixed_response)
+                    st.success("Fixed Thai JSON structure successfully")
+                    return content
+                except json.JSONDecodeError as e:
+                    st.warning(f"Thai-specific fixes not sufficient, will try generic approaches: {str(e)}")
+            
+            # Check for the specific pattern of intro object without closing brace
+            intro_missing_close = re.search(r'\{\s*"title".*"content"\s*:\s*\{\s*"intro"\s*:\s*\{\s*"Part 1"\s*:.*"Part 2"\s*:.*\}\s*$', response, re.DOTALL)
+            if intro_missing_close:
+                # Direct fix: add the missing closing braces and ensure the JSON is complete
+                fixed_response = response + "}}}" 
+                try:
+                    content = json.loads(fixed_response)
+                    st.success("Fixed incomplete intro object structure")
+                    return content
+                except json.JSONDecodeError:
+                    # Continue with other fixes if this specific fix didn't work
+                    pass
+            
+            # Try sanitizing the JSON strings first using our comprehensive sanitizer
+            st.info("Sanitizing JSON strings for special characters...")
+            sanitized_response = sanitize_json_strings(response)
+            try:
+                content = json.loads(sanitized_response)
+                st.success("Successfully sanitized JSON with special characters")
+                return content
+            except json.JSONDecodeError as e:
+                st.warning(f"Sanitization alone was not sufficient, trying more specific fixes: {str(e)}")
+                # Continue with more specific fixes
+                pass
+                    
             # First try to parse as-is
             try:
                 content = json.loads(response)
@@ -115,10 +151,46 @@ def generate_article(client, transcripts, keywords=None, news_angle=None, sectio
                 # Try to fix incomplete JSON structure
                 st.warning(f"Trying to fix incomplete JSON: {str(e)}")
                 
+                # Check for $ sign issues (especially in Thai cryptocurrencies)
+                dollar_match = re.search(r'([^\\])\$(\w+)', response)
+                if dollar_match:
+                    st.info("Detected unescaped $ sign in content, fixing...")
+                    # Escape all unescaped $ signs
+                    response = re.sub(r'([^\\])\$(\w+)', r'\1\\$\2', response)
+                
+                # Get error position information if available
+                error_match = re.search(r'line (\d+) column (\d+) \(char (\d+)\)', str(e))
+                if error_match:
+                    line_num = int(error_match.group(1))
+                    col_num = int(error_match.group(2))
+                    char_pos = int(error_match.group(3))
+                    
+                    # Check context around the error
+                    context_start = max(0, char_pos - 15)
+                    context_end = min(len(response), char_pos + 15)
+                    error_context = response[context_start:context_end]
+                    
+                    st.info(f"Error at line {line_num}, column {col_num}: ...{error_context}...")
+                    
+                    # Specific fix for comma errors
+                    if "Expecting ',' delimiter" in str(e):
+                        # Insert comma at the error location
+                        fixed_response = response[:char_pos] + "," + response[char_pos:]
+                        try:
+                            content = json.loads(fixed_response)
+                            st.success("Fixed by adding comma at error location")
+                            return content
+                        except json.JSONDecodeError:
+                            # Continue with other fixes
+                            response = fixed_response
+                
                 # Fix common formatting issues that might cause problems
                 # 1. Check for dangling properties without commas
                 response = re.sub(r'"([^"]+)"\s*:\s*"([^"]*?)"\s+"', '"\1": "\2", "', response)
                 response = re.sub(r'"([^"]+)"\s*:\s*\{([^{}]*)\}\s+"', '"\1": {\2}, "', response)
+                # Add more targeted fixes
+                response = re.sub(r'("[^"]*")\s*("[^"]*")', r'\1, \2', response)  # Add comma between string values
+                response = re.sub(r'(\})\s*(")', r'\1, \2', response)  # Add comma between } and "
                 
                 # 2. Fix objects without closing braces (particularly in nested objects)
                 response = re.sub(r'\{([^{}]*)"([^"]+)"\s*:', '{\1"\2":', response)
@@ -162,24 +234,46 @@ def generate_article(client, transcripts, keywords=None, news_angle=None, sectio
                             st.success("Successfully fixed JSON with advanced repairs")
                         except json.JSONDecodeError as e3:
                             # Last resort - try to extract and rebuild the JSON completely
-                            from modules.generation.validation import clean_gemini_response, validate_article_json
-                            cleaned_json = clean_gemini_response(response)
-                            result = validate_article_json(cleaned_json)
-                            if result:
-                                content = result
-                                st.success("Fixed JSON using validation module")
+                            from modules.generation.validation import clean_gemini_response, validate_article_json, sanitize_json_strings
+                            
+                            # First try the sanitizer
+                            sanitized = sanitize_json_strings(response)
+                            try:
+                                content = json.loads(sanitized)
+                                st.success("Fixed JSON using string sanitization")
+                                return content
+                            except json.JSONDecodeError:
+                                # Then try the full validation approach
+                                cleaned_json = clean_gemini_response(response)
+                                # Also sanitize the cleaned JSON
+                                cleaned_json = sanitize_json_strings(cleaned_json)
+                                result = validate_article_json(cleaned_json)
+                                if result:
+                                    content = result
+                                    st.success("Fixed JSON using validation module")
                             else:
                                 st.error(f"Could not fix JSON: {str(e3)}")
                                 st.code(response, language="json")
                                 return {}
                 else:
                     # Try to use the validation module to fix it
-                    from modules.generation.validation import clean_gemini_response, validate_article_json
-                    cleaned_json = clean_gemini_response(response)
-                    result = validate_article_json(cleaned_json)
-                    if result:
-                        content = result
-                        st.success("Fixed JSON using validation module")
+                    from modules.generation.validation import clean_gemini_response, validate_article_json, sanitize_json_strings
+                    
+                    # First try with just sanitizing
+                    sanitized = sanitize_json_strings(response)
+                    try:
+                        content = json.loads(sanitized)
+                        st.success("Fixed JSON using string sanitization")
+                        return content
+                    except json.JSONDecodeError:
+                        # Then try the full validation pipeline
+                        cleaned_json = clean_gemini_response(response)
+                        # Also sanitize the cleaned result
+                        cleaned_json = sanitize_json_strings(cleaned_json)
+                        result = validate_article_json(cleaned_json)
+                        if result:
+                            content = result
+                            st.success("Fixed JSON using validation module")
                     else:
                         st.error(f"JSON parsing error: {str(e)}")
                         st.code(response, language="json")

@@ -34,6 +34,19 @@ def clean_gemini_response(text):
 
 def fix_json_structure(text):
     """Fix common JSON structure issues and ensure proper formatting."""
+    # Special case for intro objects missing closing braces (common pattern in Thai content)
+    intro_missing_close = re.search(r'\{\s*"title".*"content"\s*:\s*\{\s*"intro"\s*:\s*\{\s*"Part 1"\s*:.*"Part 2"\s*:.*\}\s*$', text, re.DOTALL)
+    if intro_missing_close:
+        # Add missing closing braces and return immediately
+        fixed_text = text + "}}}" 
+        try:
+            # Verify it's now valid
+            json.loads(fixed_text)
+            return fixed_text
+        except json.JSONDecodeError:
+            # Continue with other fixes
+            pass
+    
     # Ensure the text starts with { and ends with }
     if not text.startswith('{'):
         text = '{' + text
@@ -163,15 +176,42 @@ def validate_article_json(json_str) -> Dict:
     try:
         # First, try to parse the JSON string
         try:
-            data = json.loads(json_str)
-        except json.JSONDecodeError as e:
-            # Try to fix common JSON formatting issues
-            st.warning(f"Attempting to fix JSON structure: {str(e)}")
+            # First sanitize JSON strings to handle special characters like $
+            sanitized_json = sanitize_json_strings(json_str)
+            try:
+                data = json.loads(sanitized_json)
+                st.success("Successfully sanitized JSON with special characters")
+                return data  # Return early with the sanitized data
+            except json.JSONDecodeError:
+                # Continue with more specific fixes if sanitizing alone doesn't work
+                pass
             
-            # Fix missing closing braces
-            open_braces = json_str.count('{')
-            close_braces = json_str.count('}')
-            fixed_json = json_str.strip()
+            # Check if this is Thai content that needs special handling
+            if contains_thai_text(json_str):
+                st.info("Detected Thai content, applying specialized fixes")
+                # Apply Thai-specific JSON fixes
+                fixed_json = fix_thai_json(json_str)
+                # Also sanitize the fixed JSON
+                fixed_json = sanitize_json_strings(fixed_json)
+                try:
+                    data = json.loads(fixed_json)
+                    st.success("Successfully fixed Thai JSON structure")
+                    return data  # Return early with the fixed data
+                except json.JSONDecodeError as e:
+                    st.warning(f"Thai-specific fixes not sufficient: {str(e)}")
+                    # Continue with more general fixes below
+            
+            # If the special case didn't work, try standard fixes
+            try:
+                data = json.loads(json_str)
+            except json.JSONDecodeError as e:
+                # Try to fix common JSON formatting issues
+                st.warning(f"Attempting to fix JSON structure: {str(e)}")
+                
+                # Fix missing closing braces
+                open_braces = json_str.count('{')
+                close_braces = json_str.count('}')
+                fixed_json = json_str.strip()
             
             if open_braces > close_braces:
                 # Add missing closing braces
@@ -252,6 +292,70 @@ def validate_article_json(json_str) -> Dict:
     except ValueError as e:
         st.error(f"Validation error: {str(e)}")
         return {}
+
+def contains_thai_text(text):
+    """Check if the text contains Thai language characters."""
+    # Thai Unicode range: \u0E00-\u0E7F
+    return bool(re.search(r'[\u0E00-\u0E7F]', text))
+
+def fix_thai_json(json_str):
+    """Apply specific fixes for Thai JSON content which often has incomplete structure."""
+    if not contains_thai_text(json_str):
+        return json_str
+    
+    # Pre-process: Escape dollar signs in Thai content
+    # This fix handles issues where $ in Thai content like "$MEMEX" causes JSON parsing problems
+    dollar_sign_pattern = re.compile(r'(\$\w+)(?=[^"]*")')
+    json_str = dollar_sign_pattern.sub(r'\\\1', json_str)  # Escape $ with \
+    
+    # Fix 1: Handle the specific pattern with intro object missing closing brace
+    intro_pattern = re.search(r'\{\s*"title".*"content"\s*:\s*\{\s*"intro"\s*:\s*\{\s*"Part 1"\s*:.*"Part 2"\s*:.*\}\s*$', json_str, re.DOTALL)
+    if intro_pattern:
+        return json_str + "}}}"  # Add closing braces for intro, content, and main object
+    
+    # Fix 2: Check if we have any incomplete objects with Thai content
+    for match in re.finditer(r'"([^"]+)"\s*:\s*\{([^}]*)$', json_str, re.MULTILINE):
+        key = match.group(1)
+        value = match.group(2)
+        if contains_thai_text(value) and not value.endswith("}"):
+            # Found an incomplete Thai object
+            pos = match.end()
+            json_str = json_str[:pos] + "}" + json_str[pos:]
+    
+    # Fix 3: Balance braces overall
+    open_count = json_str.count('{')
+    close_count = json_str.count('}')
+    if open_count > close_count:
+        json_str = json_str + ('}' * (open_count - close_count))
+    
+    return json_str
+
+def sanitize_json_strings(json_str):
+    """Sanitize and escape problematic characters in JSON strings."""
+    # Pattern to find all string literals in JSON
+    string_pattern = re.compile(r'"([^"]*)"')
+    
+    # Define problematic characters and their replacements
+    replacements = [
+        # Escape dollar sign in cryptocurrency symbols
+        (r'(?<=[^\\])\$(\w+)', r'\\$\1'),
+        # Fix other problematic characters if needed
+        (r'(?<=[^\\])\\(?![\\"/bfnrt])', r'\\\\')
+    ]
+    
+    def replace_in_string(match):
+        # Get the string content without quotes
+        content = match.group(1)
+        
+        # Apply all replacements to the string content
+        for pattern, replacement in replacements:
+            content = re.sub(pattern, replacement, content)
+            
+        # Return the fixed string with quotes
+        return f'"{content}"'
+    
+    # Apply replacements to all string literals in the JSON
+    return string_pattern.sub(replace_in_string, json_str)
 
 def clean_source_content(content):
     """Clean source content by handling special characters and escape sequences"""
