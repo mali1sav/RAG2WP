@@ -37,31 +37,44 @@ def generate_image(prompt: str, style: str = "photorealistic") -> Optional[Dict]
         # Enhance prompt with style
         enhanced_prompt = f"{prompt} Style: {style}, high quality, detailed, professional"
         
-        # Generate image
-        response = together.Image.create(
+        # Generate image using raw API call
+        response = together.Inference.create(
+            model='stabilityai/stable-diffusion-xl-base-1.0',
             prompt=enhanced_prompt,
-            model="stabilityai/stable-diffusion-2-1",
-            width=1024,
-            height=1024,
-            steps=30,
-            seed=42  # For reproducibility
+            max_tokens=512,
+            temperature=0.7,
+            top_p=0.7,
+            top_k=50,
+            repetition_penalty=1,
+            stream=False,
+            image_width=1024,
+            image_height=1024,
+            seed=42
         )
         
         if not response or not response.output:
             st.error("No image generated from Together AI")
             return None
             
-        # Get the image URL from response
-        image_url = response.output.image_url
+        # Get the image data from response
+        image_data = response.output[0] if isinstance(response.output, list) else response.output
         
-        # Download and verify the image
+        # Convert base64 to image and save
         try:
-            img_response = requests.get(image_url)
-            img_response.raise_for_status()
-            img = Image.open(BytesIO(img_response.content))
+            import base64
+            img_data = base64.b64decode(image_data)
+            img = Image.open(BytesIO(img_data))
+            
+            # Save image to a temporary file
+            import tempfile
+            import os
+            
+            temp_dir = tempfile.gettempdir()
+            temp_path = os.path.join(temp_dir, f"article_image_{hash(prompt)}.png")
+            img.save(temp_path, 'PNG')
             
             return {
-                'url': image_url,
+                'url': temp_path,  # Local file path instead of URL
                 'width': img.width,
                 'height': img.height,
                 'prompt': prompt,
