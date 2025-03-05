@@ -114,25 +114,76 @@ def generate_article(client, transcripts, keywords=None, news_angle=None, sectio
             except json.JSONDecodeError as e:
                 # Try to fix incomplete JSON structure
                 st.warning(f"Trying to fix incomplete JSON: {str(e)}")
+                
+                # Fix common formatting issues that might cause problems
+                # 1. Check for dangling properties without commas
+                response = re.sub(r'"([^"]+)"\s*:\s*"([^"]*?)"\s+"', '"\1": "\2", "', response)
+                response = re.sub(r'"([^"]+)"\s*:\s*\{([^{}]*)\}\s+"', '"\1": {\2}, "', response)
+                
+                # 2. Fix objects without closing braces (particularly in nested objects)
+                response = re.sub(r'\{([^{}]*)"([^"]+)"\s*:', '{\1"\2":', response)
+                
                 # Count opening and closing braces
                 open_braces = response.count('{')
                 close_braces = response.count('}')
                 
+                # Fix missing closing braces
                 if open_braces > close_braces:
                     # Add missing closing braces
                     missing_braces = open_braces - close_braces
                     fixed_response = response + ('}' * missing_braces)
                     st.info(f"Added {missing_braces} missing closing braces to JSON")
+                    
                     try:
+                        # Try parsing with fixed braces
                         content = json.loads(fixed_response)
                     except json.JSONDecodeError as e2:
-                        st.error(f"Could not fix JSON: {str(e2)}")
+                        st.warning(f"First fix attempt failed: {str(e2)}")
+                        
+                        # Try more aggressive fixing:
+                        # 1. Fix property patterns that are missing commas
+                        fixed_response = re.sub(r'\}\s*"', '}, "', fixed_response)
+                        fixed_response = re.sub(r'"\s*\{', '", {', fixed_response)
+                        
+                        # 2. Find unbalanced quotes
+                        quote_count = fixed_response.count('"')
+                        if quote_count % 2 != 0:
+                            # Add a missing quote at the end of the last valid property
+                            last_colon = fixed_response.rfind(':')
+                            if last_colon > 0:
+                                next_quote = fixed_response.find('"', last_colon)
+                                next_brace = fixed_response.find('}', last_colon)
+                                if next_quote == -1 or (next_brace > 0 and next_brace < next_quote):
+                                    # Insert a quote before the next closing brace
+                                    fixed_response = fixed_response[:next_brace] + '"' + fixed_response[next_brace:]
+                        
+                        try:
+                            content = json.loads(fixed_response)
+                            st.success("Successfully fixed JSON with advanced repairs")
+                        except json.JSONDecodeError as e3:
+                            # Last resort - try to extract and rebuild the JSON completely
+                            from modules.generation.validation import clean_gemini_response, validate_article_json
+                            cleaned_json = clean_gemini_response(response)
+                            result = validate_article_json(cleaned_json)
+                            if result:
+                                content = result
+                                st.success("Fixed JSON using validation module")
+                            else:
+                                st.error(f"Could not fix JSON: {str(e3)}")
+                                st.code(response, language="json")
+                                return {}
+                else:
+                    # Try to use the validation module to fix it
+                    from modules.generation.validation import clean_gemini_response, validate_article_json
+                    cleaned_json = clean_gemini_response(response)
+                    result = validate_article_json(cleaned_json)
+                    if result:
+                        content = result
+                        st.success("Fixed JSON using validation module")
+                    else:
+                        st.error(f"JSON parsing error: {str(e)}")
                         st.code(response, language="json")
                         return {}
-                else:
-                    st.error(f"JSON parsing error: {str(e)}")
-                    st.code(response, language="json")
-                    return {}
             
             if isinstance(content, list):
                 content = content[0] if content else {}
