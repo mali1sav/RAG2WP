@@ -134,6 +134,8 @@ def generate_article(client, transcripts, keywords=None, news_angle=None, sectio
             
             # Try sanitizing the JSON strings first using our comprehensive sanitizer
             st.info("Sanitizing JSON strings for special characters...")
+            # Import here to ensure it's available
+            from modules.generation.validation import sanitize_json_strings
             sanitized_response = sanitize_json_strings(response)
             try:
                 content = json.loads(sanitized_response)
@@ -237,6 +239,7 @@ def generate_article(client, transcripts, keywords=None, news_angle=None, sectio
                             from modules.generation.validation import clean_gemini_response, validate_article_json, sanitize_json_strings
                             
                             # First try the sanitizer
+                            from modules.generation.validation import sanitize_json_strings
                             sanitized = sanitize_json_strings(response)
                             try:
                                 content = json.loads(sanitized)
@@ -260,6 +263,7 @@ def generate_article(client, transcripts, keywords=None, news_angle=None, sectio
                     from modules.generation.validation import clean_gemini_response, validate_article_json, sanitize_json_strings
                     
                     # First try with just sanitizing
+                    from modules.generation.validation import sanitize_json_strings
                     sanitized = sanitize_json_strings(response)
                     try:
                         content = json.loads(sanitized)
