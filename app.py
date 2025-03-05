@@ -34,6 +34,25 @@ def handle_browser_redirect():
         del st.session_state.pending_edit_url
         # Don't rerun here to prevent blank screen
 
+def init_session_state():
+    """Initialize session state variables to persist values between refreshes."""
+    if 'urls_input' not in st.session_state:
+        st.session_state.urls_input = DEFAULT_URL
+    if 'keywords_input' not in st.session_state:
+        st.session_state.keywords_input = DEFAULT_KEYWORD
+    if 'news_angle' not in st.session_state:
+        st.session_state.news_angle = DEFAULT_NEWS_ANGLE
+    if 'section_count' not in st.session_state:
+        st.session_state.section_count = DEFAULT_SECTION_COUNT
+    if 'selected_site' not in st.session_state:
+        st.session_state.selected_site = list(WORDPRESS_SITES.keys())[0] if WORDPRESS_SITES else None
+    if 'selected_promo' not in st.session_state:
+        st.session_state.selected_promo = "None"
+    if 'additional_content' not in st.session_state:
+        st.session_state.additional_content = ""
+    if 'content_type_choice' not in st.session_state:
+        st.session_state.content_type_choice = "Post"
+
 def load_promotional_content():
     """Load promotional content options."""
     pr_folder = os.path.join(os.path.dirname(__file__), "pr")
@@ -217,29 +236,78 @@ def main():
         st.error("Failed to initialize Gemini client. Please check your API keys.")
         return
         
+    # Initialize session state for form persistence
+    init_session_state()
+    
+    # Define callback functions for input changes
+    def update_urls():
+        st.session_state.urls_input = st.session_state.urls_area
+        
+    def update_keywords():
+        st.session_state.keywords_input = st.session_state.keywords_area
+        
+    def update_news_angle():
+        st.session_state.news_angle = st.session_state.news_angle_input
+        
+    def update_section_count():
+        st.session_state.section_count = st.session_state.section_slider
+        
+    def update_additional_content():
+        st.session_state.additional_content = st.session_state.additional_content_area
+        
+    def update_promo():
+        st.session_state.selected_promo = st.session_state.promo_select
+        
+    def update_site():
+        st.session_state.selected_site = st.session_state.site_select
+        
+    def update_content_type():
+        st.session_state.content_type_choice = st.session_state.content_type_radio
+    
     # Sidebar inputs
     with st.sidebar:
         st.header("Article Generation")
-        urls_input = st.text_area("Enter URLs (one per line):", value=DEFAULT_URL)
-        keywords_input = st.text_area("Keywords (one per line):", value=DEFAULT_KEYWORD, height=100)
-        news_angle = st.text_input("News Angle:", value=DEFAULT_NEWS_ANGLE)
-        section_count = st.slider("Number of sections:", 2, 8, DEFAULT_SECTION_COUNT)
+        urls_input = st.text_area("Enter URLs (one per line):", value=st.session_state.urls_input, on_change=update_urls, key="urls_area")
+        keywords_input = st.text_area("Keywords (one per line):", value=st.session_state.keywords_input, height=100, on_change=update_keywords, key="keywords_area")
+        news_angle = st.text_input("News Angle:", value=st.session_state.news_angle, on_change=update_news_angle, key="news_angle_input")
+        section_count = st.slider("Number of sections:", 2, 8, st.session_state.section_count, on_change=update_section_count, key="section_slider")
         
         additional_content = st.text_area(
             "Additional Content",
+            value=st.session_state.additional_content,
             placeholder="Paste any extra content here. It will be treated as an additional source.",
-            height=150
+            height=150,
+            on_change=update_additional_content,
+            key="additional_content_area"
         )
         
         st.header("Promotional Content")
         promo_options = load_promotional_content()
-        selected_promo = st.selectbox("Select promotional content:", promo_options)
+        selected_promo = st.selectbox(
+            "Select promotional content:", 
+            promo_options, 
+            index=promo_options.index(st.session_state.selected_promo) if st.session_state.selected_promo in promo_options else 0, 
+            on_change=update_promo, 
+            key="promo_select"
+        )
         promotional_text = selected_promo if selected_promo != "None" else None
         
         st.header("WordPress Upload")
         site_options = list(WORDPRESS_SITES.keys())
-        selected_site = st.selectbox("Choose a site:", site_options)
-        content_type_choice = st.radio("Upload as:", ("Post", "Page"))
+        selected_site = st.selectbox(
+            "Choose a site:", 
+            site_options, 
+            index=site_options.index(st.session_state.selected_site) if st.session_state.selected_site in site_options else 0, 
+            on_change=update_site, 
+            key="site_select"
+        )
+        content_type_choice = st.radio(
+            "Upload as:", 
+            ("Post", "Page"), 
+            index=0 if st.session_state.content_type_choice == "Post" else 1, 
+            on_change=update_content_type, 
+            key="content_type_radio"
+        )
         
         generate_button = st.button("Generate Article")
     
@@ -247,6 +315,16 @@ def main():
     messages_placeholder = st.container()
     
     if generate_button:
+        # Save all form values to session state before processing
+        st.session_state.urls_input = urls_input
+        st.session_state.keywords_input = keywords_input
+        st.session_state.news_angle = news_angle
+        st.session_state.section_count = section_count
+        st.session_state.additional_content = additional_content
+        st.session_state.selected_promo = selected_promo
+        st.session_state.selected_site = selected_site
+        st.session_state.content_type_choice = content_type_choice
+        
         with st.spinner("Extracting content and generating article..."):
             transcripts = []
             
