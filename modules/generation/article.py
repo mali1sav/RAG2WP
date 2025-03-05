@@ -59,6 +59,8 @@ def generate_article(client, transcripts, keywords=None, news_angle=None, sectio
         if not transcripts:
             return None
             
+        from modules.generation.image import generate_images_for_article
+            
         # Prepare keywords
         keyword_list = keywords if keywords else []
         primary_keyword = keyword_list[0] if keyword_list else ""
@@ -160,6 +162,9 @@ def generate_article(client, transcripts, keywords=None, news_angle=None, sectio
                         'width': PROMOTIONAL_IMAGES.get(promotional_text, {}).get("width", ""),
                         'height': PROMOTIONAL_IMAGES.get(promotional_text, {}).get("height", "")
                     })
+            
+            # Generate article images using Together AI
+            content = generate_images_for_article(content)
                     
             return content
             
