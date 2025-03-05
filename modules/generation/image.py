@@ -34,22 +34,21 @@ def generate_image(prompt: str, style: str = "photorealistic") -> Optional[Dict]
         
         # API configuration
         model = "stabilityai/stable-diffusion-xl-base-1.0"
-        api_url = "https://api.together.xyz/inference"
+        api_url = "https://api.together.xyz/v1/images/generations"
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
         
-        # Prepare payload for image generation
+        # Prepare payload for image generation using v1 API
         payload = {
             "model": model,
             "prompt": enhanced_prompt,
-            "temperature": 0.7,
-            "top_p": 0.7,
-            "top_k": 50,
-            "max_tokens": 512,
-            "repetition_penalty": 1.0,
-            "stream": False,
+            "n": 1,  # Number of images to generate
+            "size": "1024x1024",
+            "response_format": "b64_json",
+            "steps": 30,
+            "seed": int(time.time()) % 1000000  # Random seed
         }
         
         st.info(f"Generating image with prompt: {enhanced_prompt}")
@@ -72,7 +71,22 @@ def generate_image(prompt: str, style: str = "photorealistic") -> Optional[Dict]
         
         # Extract image data
         output = response_data.get('output')
-        image_output = output[0] if isinstance(output, list) else output
+        
+        # Handle different response formats from Together API
+        if isinstance(output, list):
+            image_output = output[0]
+        elif isinstance(output, dict) and 'image' in output:
+            # Handle the case where output is a dictionary with 'image' key
+            image_output = output['image']
+        elif isinstance(output, dict) and 'data' in output:
+            # Handle the case where output is a dictionary with 'data' key
+            image_output = output['data']
+        else:
+            image_output = output
+            
+        # Log the output format for debugging
+        logging.info(f"Together API output format: {type(output)}")
+        logging.info(f"Image output format: {type(image_output)}")
         
         # If image_output is a base64 string, decode it
         if isinstance(image_output, str):
@@ -111,8 +125,64 @@ def generate_image(prompt: str, style: str = "photorealistic") -> Optional[Dict]
                 st.error(f"Error processing image data: {str(e)}")
                 logging.exception("Image processing error")
                 return None
+        elif isinstance(image_output, dict):
+            # Try to extract base64 image from dictionary
+            st.info(f"Received dictionary output from API: {list(image_output.keys())}")
+            
+            if 'data' in image_output:
+                image_data = image_output['data']
+            elif 'image' in image_output:
+                image_data = image_output['image']
+            elif 'base64' in image_output:
+                image_data = image_output['base64']
+            else:
+                # Try to find any string value that could be base64 data
+                for key, value in image_output.items():
+                    if isinstance(value, str) and len(value) > 100:  # Likely base64 data
+                        image_data = value
+                        break
+                else:
+                    st.error(f"Could not find image data in dictionary: {list(image_output.keys())}")
+                    return None
+                    
+            try:
+                # Process the image data
+                unique_id = str(uuid.uuid4())[:8]
+                img_filename = f"article_image_{unique_id}_{int(time.time())}.png"
+                
+                # Save in a directory accessible to Streamlit
+                img_dir = os.path.join(os.getcwd(), "static", "images")
+                os.makedirs(img_dir, exist_ok=True)
+                img_path = os.path.join(img_dir, img_filename)
+                
+                # Create the image from base64
+                img_data = base64.b64decode(image_data)
+                with open(img_path, "wb") as img_file:
+                    img_file.write(img_data)
+                
+                # Get image dimensions
+                img = Image.open(BytesIO(img_data))
+                width, height = img.size
+                
+                st.success(f"Image generated successfully and saved to {img_path}")
+                
+                # Create relative URL
+                relative_url = f"/static/images/{img_filename}"
+                
+                return {
+                    'url': relative_url,
+                    'width': width,
+                    'height': height,
+                    'prompt': prompt,
+                    'alt_text': prompt
+                }
+            except Exception as e:
+                st.error(f"Error processing dictionary image data: {str(e)}")
+                logging.exception("Dictionary image processing error")
+                return None
         else:
             st.error(f"Unexpected output format: {type(image_output)}")
+            logging.error(f"Unexpected output format: {type(image_output)}, content: {image_output}")
             return None
 
             
