@@ -173,67 +173,95 @@ def create_safe_json_from_parts(text):
 
 def validate_article_json(json_str) -> Dict:
     """Validate article JSON against schema and return cleaned data."""
+    data = {}
+    
+    # First sanitize JSON strings to handle special characters like $
+    sanitized_json = sanitize_json_strings(json_str)
     try:
-        # First, try to parse the JSON string
-        try:
-            # First sanitize JSON strings to handle special characters like $
-            sanitized_json = sanitize_json_strings(json_str)
+        data = json.loads(sanitized_json)
+        st.success("Successfully sanitized JSON with special characters")
+        # We have valid JSON, continue with validation
+    except json.JSONDecodeError:
+        # Continue with more specific fixes if sanitizing alone doesn't work
+        # Check if this is Thai content that needs special handling
+        if contains_thai_text(json_str):
+            st.info("Detected Thai content, applying specialized fixes")
+            # Apply Thai-specific JSON fixes
+            fixed_json = fix_thai_json(json_str)
+            # Also sanitize the fixed JSON
+            fixed_json = sanitize_json_strings(fixed_json)
             try:
-                data = json.loads(sanitized_json)
-                st.success("Successfully sanitized JSON with special characters")
-                return data  # Return early with the sanitized data
-            except json.JSONDecodeError:
-                # Continue with more specific fixes if sanitizing alone doesn't work
-                pass
-            
-            # Check if this is Thai content that needs special handling
-            if contains_thai_text(json_str):
-                st.info("Detected Thai content, applying specialized fixes")
-                # Apply Thai-specific JSON fixes
-                fixed_json = fix_thai_json(json_str)
-                # Also sanitize the fixed JSON
-                fixed_json = sanitize_json_strings(fixed_json)
-                try:
-                    data = json.loads(fixed_json)
-                    st.success("Successfully fixed Thai JSON structure")
-                    return data  # Return early with the fixed data
-                except json.JSONDecodeError as e:
-                    st.warning(f"Thai-specific fixes not sufficient: {str(e)}")
-                    # Continue with more general fixes below
-            
-            # If the special case didn't work, try standard fixes
-            try:
-                data = json.loads(json_str)
+                data = json.loads(fixed_json)
+                st.success("Successfully fixed Thai JSON structure")
+                # We have valid JSON, continue with validation
             except json.JSONDecodeError as e:
+                st.warning(f"Thai-specific fixes not sufficient: {str(e)}")
+                # Try more general fixes
+                try:
+                    # Try to fix common JSON formatting issues
+                    st.warning(f"Attempting to fix JSON structure")
+                    
+                    # Fix missing closing braces
+                    open_braces = json_str.count('{')
+                    close_braces = json_str.count('}')
+                    fixed_json = json_str.strip()
+                    
+                    if open_braces > close_braces:
+                        # Add missing closing braces
+                        missing_braces = open_braces - close_braces
+                        fixed_json += ('}' * missing_braces)
+                        st.info(f"Added {missing_braces} missing closing braces")
+                    else:
+                        # Try adding a single closing brace if needed
+                        if not fixed_json.endswith('}'):
+                            fixed_json += '}'
+                            
+                    # Try to fix common JSON issues like missing commas
+                    fixed_json = re.sub(r'"\s*\n\s*"', '", "', fixed_json)  # Add missing commas between key-value pairs
+                    fixed_json = re.sub(r'\}\s*\n\s*"', '}, "', fixed_json)  # Add missing commas after objects
+                    fixed_json = re.sub(r'\}\s*\n\s*\{', '}, {', fixed_json)  # Add missing commas between objects
+                    
+                    try:
+                        data = json.loads(fixed_json)
+                        st.success("Successfully fixed JSON structure")
+                    except json.JSONDecodeError as e2:
+                        st.error(f"Could not fix JSON structure: {str(e2)}")
+                        st.code(json_str, language="json")
+                        return {}
+                except Exception as e:
+                    st.error(f"Error during JSON repair: {str(e)}")
+                    return {}
+        else:
+            # If not Thai content, apply general fixes
+            try:
                 # Try to fix common JSON formatting issues
-                st.warning(f"Attempting to fix JSON structure: {str(e)}")
+                st.warning("Attempting to fix general JSON structure issues")
                 
                 # Fix missing closing braces
                 open_braces = json_str.count('{')
                 close_braces = json_str.count('}')
                 fixed_json = json_str.strip()
-            
-            if open_braces > close_braces:
-                # Add missing closing braces
-                missing_braces = open_braces - close_braces
-                fixed_json += ('}' * missing_braces)
-                st.info(f"Added {missing_braces} missing closing braces")
-            else:
-                # Try adding a single closing brace if needed
-                if not fixed_json.endswith('}'):
-                    fixed_json += '}'
-                    
-            # Try to fix common JSON issues like missing commas
-            fixed_json = re.sub(r'"\s*\n\s*"', '", "', fixed_json)  # Add missing commas between key-value pairs
-            fixed_json = re.sub(r'\}\s*\n\s*"', '}, "', fixed_json)  # Add missing commas after objects
-            fixed_json = re.sub(r'\}\s*\n\s*\{', '}, {', fixed_json)  # Add missing commas between objects
-            
-            try:
-                data = json.loads(fixed_json)
-                st.success("Successfully fixed JSON structure")
-            except json.JSONDecodeError as e2:
-                st.error(f"Could not fix JSON structure: {str(e2)}")
-                st.code(json_str, language="json")
+                
+                if open_braces > close_braces:
+                    # Add missing closing braces
+                    missing_braces = open_braces - close_braces
+                    fixed_json += ('}' * missing_braces)
+                    st.info(f"Added {missing_braces} missing closing braces")
+                
+                # Try to fix common JSON issues like missing commas
+                fixed_json = re.sub(r'"\s*\n\s*"', '", "', fixed_json)  # Add missing commas between key-value pairs
+                fixed_json = re.sub(r'\}\s*\n\s*"', '}, "', fixed_json)  # Add missing commas after objects
+                fixed_json = re.sub(r'\}\s*\n\s*\{', '}, {', fixed_json)  # Add missing commas between objects
+                
+                try:
+                    data = json.loads(fixed_json)
+                    st.success("Successfully fixed general JSON structure")
+                except json.JSONDecodeError as e2:
+                    st.error(f"Could not fix JSON structure: {str(e2)}")
+                    st.code(json_str, language="json")
+                    return {}
+            except Exception as e:
+                st.error(f"Error during general JSON repair: {str(e)}")
                 return {}
         
         # Handle list or non-dict data
