@@ -1,9 +1,9 @@
-"""Image generation using Direct API calls to Together AI."""
+"""Image generation using Together AI Python client."""
 import os
 import logging
-import requests
 import json
 import base64
+import re
 import streamlit as st
 from typing import Optional, Dict
 from PIL import Image
@@ -11,9 +11,16 @@ from io import BytesIO
 import uuid
 import time
 
+# Import the Together client
+try:
+    from together import Together
+except ImportError:
+    st.error("Together AI Python client not installed. Please run: pip install together")
+    logging.error("Missing Together Python client library")
+
 def generate_image(prompt: str, style: str = "photorealistic") -> Optional[Dict]:
     """
-    Generate an image using Together AI's API directly.
+    Generate an image using Together AI Python client.
     
     Args:
         prompt (str): Image generation prompt
@@ -32,66 +39,35 @@ def generate_image(prompt: str, style: str = "photorealistic") -> Optional[Dict]
         # Enhance prompt with style
         enhanced_prompt = f"{prompt} Style: {style}, high quality, detailed, professional photograph"
         
-        # API configuration
-        model = "stabilityai/stable-diffusion-xl-base-1.0"
-        api_url = "https://api.together.xyz/v1/images/generations"
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
+        # Clean prompt to ensure it's in English (if needed)
+        enhanced_prompt_english = re.sub(r'[\u0E00-\u0E7F]+', '', enhanced_prompt).strip()
+        if not enhanced_prompt_english:
+            enhanced_prompt_english = "A photo-realistic scene depicting the subject matter"
+            st.warning("Using fallback image prompt since no English text was found")
         
-        # Prepare payload for image generation using v1 API
-        payload = {
-            "model": model,
-            "prompt": enhanced_prompt,
-            "n": 1,  # Number of images to generate
-            "size": "1024x1024",
-            "response_format": "b64_json",
-            "steps": 30,
-            "seed": int(time.time()) % 1000000  # Random seed
-        }
+        st.info(f"Generating image with prompt: '{enhanced_prompt_english}'")
         
-        st.info(f"Generating image with prompt: {enhanced_prompt}")
-        
-        # Make API request
-        response = requests.post(api_url, headers=headers, json=payload)
-        
-        # Check if successful
-        if response.status_code != 200:
-            st.error(f"Image generation failed: {response.status_code} {response.text}")
-            logging.error(f"Together API error: {response.status_code} {response.text}")
-            return None
-        
-        response_data = response.json()
-        
-        # Check if output exists
-        if not response_data.get('output'):
-            st.error("No image output received")
-            return None
-        
-        # Extract image data
-        output = response_data.get('output')
-        
-        # Handle different response formats from Together API
-        if isinstance(output, list):
-            image_output = output[0]
-        elif isinstance(output, dict) and 'image' in output:
-            # Handle the case where output is a dictionary with 'image' key
-            image_output = output['image']
-        elif isinstance(output, dict) and 'data' in output:
-            # Handle the case where output is a dictionary with 'data' key
-            image_output = output['data']
-        else:
-            image_output = output
+        # Initialize Together client
+        try:
+            together_client = Together(api_key=api_key)
             
-        # Log the output format for debugging
-        logging.info(f"Together API output format: {type(output)}")
-        logging.info(f"Image output format: {type(image_output)}")
-        
-        # If image_output is a base64 string, decode it
-        if isinstance(image_output, str):
-            try:
-                # Save to a temporary file
+            # Make the API call using the library
+            response = together_client.images.generate(
+                prompt=enhanced_prompt_english,
+                model="black-forest-labs/FLUX.1-schnell-free",  # Using a reliable model
+                width=1024,
+                height=768,
+                steps=4,  # Faster generation
+                n=1,
+                response_format="b64_json"
+            )
+            
+            # Process the response
+            if response and hasattr(response, 'data') and len(response.data) > 0:
+                # Extract base64 data
+                b64_data = response.data[0].b64_json
+                
+                # Save the image
                 unique_id = str(uuid.uuid4())[:8]
                 img_filename = f"article_image_{unique_id}_{int(time.time())}.png"
                 
@@ -101,7 +77,7 @@ def generate_image(prompt: str, style: str = "photorealistic") -> Optional[Dict]
                 img_path = os.path.join(img_dir, img_filename)
                 
                 # Create the image from base64
-                img_data = base64.b64decode(image_output)
+                img_data = base64.b64decode(b64_data)
                 with open(img_path, "wb") as img_file:
                     img_file.write(img_data)
                 
@@ -109,6 +85,8 @@ def generate_image(prompt: str, style: str = "photorealistic") -> Optional[Dict]
                 img = Image.open(BytesIO(img_data))
                 width, height = img.size
                 
+                # Display image in Streamlit
+                st.image("data:image/png;base64," + b64_data, caption=prompt)
                 st.success(f"Image generated successfully and saved to {img_path}")
                 
                 # Create relative URL
@@ -119,76 +97,28 @@ def generate_image(prompt: str, style: str = "photorealistic") -> Optional[Dict]
                     'width': width,
                     'height': height,
                     'prompt': prompt,
-                    'alt_text': prompt
+                    'alt_text': prompt,
+                    'b64_data': b64_data
                 }
-            except Exception as e:
-                st.error(f"Error processing image data: {str(e)}")
-                logging.exception("Image processing error")
-                return None
-        elif isinstance(image_output, dict):
-            # Try to extract base64 image from dictionary
-            st.info(f"Received dictionary output from API: {list(image_output.keys())}")
-            
-            if 'data' in image_output:
-                image_data = image_output['data']
-            elif 'image' in image_output:
-                image_data = image_output['image']
-            elif 'base64' in image_output:
-                image_data = image_output['base64']
             else:
-                # Try to find any string value that could be base64 data
-                for key, value in image_output.items():
-                    if isinstance(value, str) and len(value) > 100:  # Likely base64 data
-                        image_data = value
-                        break
-                else:
-                    st.error(f"Could not find image data in dictionary: {list(image_output.keys())}")
-                    return None
-                    
-            try:
-                # Process the image data
-                unique_id = str(uuid.uuid4())[:8]
-                img_filename = f"article_image_{unique_id}_{int(time.time())}.png"
-                
-                # Save in a directory accessible to Streamlit
-                img_dir = os.path.join(os.getcwd(), "static", "images")
-                os.makedirs(img_dir, exist_ok=True)
-                img_path = os.path.join(img_dir, img_filename)
-                
-                # Create the image from base64
-                img_data = base64.b64decode(image_data)
-                with open(img_path, "wb") as img_file:
-                    img_file.write(img_data)
-                
-                # Get image dimensions
-                img = Image.open(BytesIO(img_data))
-                width, height = img.size
-                
-                st.success(f"Image generated successfully and saved to {img_path}")
-                
-                # Create relative URL
-                relative_url = f"/static/images/{img_filename}"
-                
-                return {
-                    'url': relative_url,
-                    'width': width,
-                    'height': height,
-                    'prompt': prompt,
-                    'alt_text': prompt
-                }
-            except Exception as e:
-                st.error(f"Error processing dictionary image data: {str(e)}")
-                logging.exception("Dictionary image processing error")
+                st.error("No image data received from Together AI.")
+                logging.error(f"No image data received. Response: {response}")
                 return None
-        else:
-            st.error(f"Unexpected output format: {type(image_output)}")
-            logging.error(f"Unexpected output format: {type(image_output)}, content: {image_output}")
+                
+        except AttributeError as e:
+            st.error(f"Error with Together client: {str(e)}")
+            logging.error(f"Together client attribute error: {str(e)}")
+            st.warning("This may be caused by an outdated version of the 'together' package. Please run: pip install -U together")
             return None
-
+            
+        except Exception as e:
+            st.error(f"Error generating image with Together client: {str(e)}")
+            logging.exception("Together client error")
+            return None
             
     except Exception as e:
-        st.error(f"Error generating image: {str(e)}")
-        logging.error(f"Image generation error: {str(e)}")
+        st.error(f"Error in image generation process: {str(e)}")
+        logging.exception("Image generation error")
         return None
 
 def generate_images_for_article(article_data: Dict) -> Dict:
