@@ -108,7 +108,32 @@ def generate_article(client, transcripts, keywords=None, news_angle=None, sectio
             
         # Parse and validate the response
         try:
-            content = json.loads(response)
+            # First try to parse as-is
+            try:
+                content = json.loads(response)
+            except json.JSONDecodeError as e:
+                # Try to fix incomplete JSON structure
+                st.warning(f"Trying to fix incomplete JSON: {str(e)}")
+                # Count opening and closing braces
+                open_braces = response.count('{')
+                close_braces = response.count('}')
+                
+                if open_braces > close_braces:
+                    # Add missing closing braces
+                    missing_braces = open_braces - close_braces
+                    fixed_response = response + ('}' * missing_braces)
+                    st.info(f"Added {missing_braces} missing closing braces to JSON")
+                    try:
+                        content = json.loads(fixed_response)
+                    except json.JSONDecodeError as e2:
+                        st.error(f"Could not fix JSON: {str(e2)}")
+                        st.code(response, language="json")
+                        return {}
+                else:
+                    st.error(f"JSON parsing error: {str(e)}")
+                    st.code(response, language="json")
+                    return {}
+            
             if isinstance(content, list):
                 content = content[0] if content else {}
             if not isinstance(content, dict):
