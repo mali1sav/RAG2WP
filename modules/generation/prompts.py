@@ -134,12 +134,12 @@ Structure your output as valid JSON with the following keys:
    - images: Array of image objects with url, alt_text, and placement (which section to place in).
    - twitter_embeds: Array of Twitter/X embed objects with url and placement
 - seo: An object with keys:
-   - slug: English URL-friendly slug that MUST include {primary_keyword}{thailand_suffix}
+   - slug: English URL-friendly slug that MUST include {primary_keyword}{thailand_suffix}. Keep it short in less than 8 words.
    - metaTitle: Thai title with {primary_keyword}
    - metaDescription: Use the same text as the Part 1 of the intro.
    - excerpt: One Thai sentence summary
    - imagePrompt: The Image Prompt must be in English only. Create a photorealistic scene that fits the article.
-   - altText: Thai ALT text with {primary_keyword} while keeping technical terms in English
+   - altText: Thai ALT text with {primary_keyword} 
 """
 
 def build_content_guidelines():
@@ -158,8 +158,9 @@ IMPORTANT NOTES:
    - Place images near relevant content that relates to the image.
 3. General Guidelines:
    - Maintain consistent tone and style.
+   - Explain technical terms to make it understood by the general public or Crypto beginners.
    - Preserve any image markdown exactly as provided.
-   - Keep technical terms and entity names in English but the rest should be in Thai.
+   - Keep entity names (people, places, organisations, brand, coin names etc.) in English but the rest should be in Thai.
 """
 
 def generate_article_prompt(params):
