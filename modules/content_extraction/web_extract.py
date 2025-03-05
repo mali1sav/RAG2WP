@@ -124,7 +124,7 @@ def extract_url_content(gemini_client, url, messages_placeholder):
                 'media': {"images": [], "twitter_embeds": []}
             }
         else:
-            st.warning("Could not extract transcript from YouTube video. Falling back to Jina extraction...")
+            st.warning("Performing content extraction via Jina AI...")
 
     with messages_placeholder:
         st.info(f"Extracting content from {url} using Jina REST API...")

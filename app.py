@@ -196,6 +196,19 @@ def main():
     # Handle redirect if needed
     handle_browser_redirect()
     
+    # Add custom CSS to make the main area use full width
+    st.markdown("""
+    <style>
+    .block-container {
+        max-width: 100%;
+        padding-top: 1rem;
+        padding-right: 1rem;
+        padding-left: 1rem;
+        padding-bottom: 1rem;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
     st.title("Article Generator and Publisher")
     
     # Initialize Gemini client
@@ -230,8 +243,8 @@ def main():
         
         generate_button = st.button("Generate Article")
     
-    # Main content area
-    messages_placeholder = st.empty()
+    # Main content area - Using full width
+    messages_placeholder = st.container()
     
     if generate_button:
         with st.spinner("Extracting content and generating article..."):
