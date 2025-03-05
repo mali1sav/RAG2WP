@@ -63,7 +63,7 @@ def parse_article(article_json, add_affiliate_note=False):
 
             # Handle empty paragraphs
             if not paragraphs:
-                content_parts.append("*Content for this section is being processed.*")
+                content_parts.append("This section will be updated with relevant content.")
                 content_parts.append("")
                 continue
 

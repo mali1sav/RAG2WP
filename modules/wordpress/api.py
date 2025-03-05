@@ -48,8 +48,13 @@ def submit_article_to_wordpress(article, wp_url, username, wp_app_password, prim
 
         # Convert to Gutenberg format if it's a post
         if content_type.lower() == "post":
-            from modules.utils.html_utils import convert_to_gutenberg_format
-            content = convert_to_gutenberg_format(content)
+            from modules.wordpress.converter import convert_to_gutenberg_format
+            try:
+                content = convert_to_gutenberg_format(content)
+                st.info("Successfully converted content to Gutenberg format")
+            except Exception as e:
+                st.error(f"Error converting to Gutenberg format: {str(e)}")
+                # Continue with the content as is
 
         # Initialize data dictionary with article content and meta fields
         data = {
