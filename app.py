@@ -181,10 +181,30 @@ def render_article_preview(article_json):
                               not any(img.get('placement', '').startswith(f'sections[{j}]')
                                     for j in range(len(article_json['content']['sections'])))]
                                     
-            if remaining_images:
+            # Limit the number of images under promotional content
+            # Consider image relevance - only use images with good alt text and context
+            MAX_PROMO_IMAGES = 2
+            filtered_images = []
+            
+            for img in remaining_images:
+                # Skip images with generic or empty alt text
+                alt_text = img.get('alt_text', '').lower()
+                if not alt_text or alt_text in ['image', 'photo', '']:
+                    continue
+                    
+                # Skip images that appear to be icons, logos, or ads
+                url = img.get('url', '').lower()
+                if any(pattern in url for pattern in ['icon', 'logo', 'banner', 'ad-', 'sidebar']):
+                    continue
+                    
+                filtered_images.append(img)
+                if len(filtered_images) >= MAX_PROMO_IMAGES:
+                    break
+            
+            if filtered_images:
                 st.markdown("## Promotional Content")
                 st.markdown("")
-                for img in remaining_images:
+                for img in filtered_images:
                     if img and img.get('url'):
                         st.image(img['url'], caption=img.get('alt_text', ''))
                         st.markdown("")

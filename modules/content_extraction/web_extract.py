@@ -34,22 +34,55 @@ def jina_extract_via_r(url: str) -> dict:
         title_match = re.search(r"Title:\s*(.*)", text)
         title = title_match.group(1).strip() if title_match else "Extracted Content"
 
-        # Extract images
+        # Extract images, filtering out likely sidebar or promotional images
         images = []
         img_matches = re.finditer(r'!\[(.*?)\]\((.*?)\)', md_content)
+        
+        # Define patterns for likely sidebar or promotional images
+        sidebar_patterns = [
+            r'icon|logo|sidebar|banner|ad-|advertisement|promo-|sponsor',
+            r'\d+x\d+',  # Dimension patterns like 300x250
+            r'tracking|pixel',
+            r'\.(svg|gif)$'  # SVG files are often icons/logos, GIFs often ads
+        ]
+        
+        MAX_IMAGES = 5  # Limit number of images
+        image_count = 0
+        
         for match in img_matches:
             alt_text = match.group(1)
             img_url = match.group(2)
-            surrounding_text = ""
+            
+            # Skip if we already have enough images
+            if image_count >= MAX_IMAGES:
+                break
+                
+            # Skip if the image appears to be a sidebar/promotional image
+            is_sidebar_image = False
+            for pattern in sidebar_patterns:
+                if re.search(pattern, img_url.lower()) or re.search(pattern, alt_text.lower()):
+                    is_sidebar_image = True
+                    break
+            
+            if is_sidebar_image:
+                continue
+                
             # Get surrounding paragraph text for context
+            surrounding_text = ""
             para_match = re.search(r'([^\n]+' + re.escape(match.group(0)) + r'[^\n]+)', md_content)
             if para_match:
                 surrounding_text = para_match.group(1)
+                
+            # If context is short, it's likely not part of main content
+            if len(surrounding_text) < 50:
+                continue
+                
             images.append({
                 "url": img_url,
                 "alt_text": alt_text,
                 "context": surrounding_text
             })
+            image_count += 1
 
         # Extract Twitter/X embeds
         twitter_embeds = []
